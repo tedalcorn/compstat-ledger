@@ -341,7 +341,6 @@ ${historicAnchor ? `MOST HISTORICALLY IMPROVED: ${historicAnchor.name} (${format
     const questionText = q || query;
     if (!questionText.trim()) return;
     
-    // Clear input immediately and start loading
     setQuery('');
     setLoading(true);
     setError('');
