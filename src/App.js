@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { AreaChart, Area, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine, ScatterChart, Scatter } from 'recharts';
+import { AreaChart, Area, LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine, ScatterChart, Scatter } from 'recharts';
 
 /* ------------------------------------------------------------------ */
 /* 1. HISTORICAL DATASETS & CONFIG                                    */
@@ -39,20 +39,9 @@ const CW = [
   {y:2024,BU:13067,FA:29452,GA:14193,GL:48445,MU:382,RA:1749,RO:16574},
   {y:2025,BU:12826,FA:29841,GA:13532,GL:48107,MU:309,RA:2049,RO:15092},
 ];
+
 const MA_CW = {2000:57304,2001:57753,2002:52469,2003:51298,2004:52158,2005:52408,2006:52169,2007:51429,2008:50310,2009:50216,2010:52716,2011:50972,2012:54495,2013:53738,2014:53847,2015:42654,2016:42422,2017:41665,2018:43126,2019:42529,2020:33400,2021:36553,2022:41161,2023:44151,2024:47738};
-const BP = [
-  {y:1993,Bx:538.5,Bk:541.3,Mn:768.8,Qn:516.8,SI:316.0},
-  {y:1997,Bx:301.0,Bk:287.7,Mn:419.3,Qn:279.9,SI:167.0},
-  {y:2001,Bx:201.9,Bk:201.4,Mn:283.7,Qn:170.2,SI:90.7},
-  {y:2005,Bx:171.5,Bk:166.5,Mn:236.2,Qn:130.0,SI:76.7},
-  {y:2009,Bx:144.4,Bk:130.8,Mn:179.9,Qn:104.2,SI:64.5},
-  {y:2013,Bx:147.4,Bk:139.8,Mn:173.5,Qn:105.6,SI:72.6},
-  {y:2017,Bx:141.0,Bk:109.3,Mn:162.2,Qn:83.9,SI:58.8},
-  {y:2019,Bx:136.5,Bk:106.2,Mn:169.4,Qn:82.9,SI:51.0},
-  {y:2021,Bx:161.1,Bk:106.3,Mn:171.8,Qn:91.6,SI:52.4},
-  {y:2023,Bx:205.7,Bk:120.6,Mn:205.1,Qn:116.1,SI:76.3},
-  {y:2025,Bx:210.4,Bk:115.7,Mn:187.2,Qn:111.1,SI:70.3},
-];
+
 const PC = [
   {n:'100th',pov:13.9,fa:19.3,ma:46.7,ta:66.0,fs:29.3,sh:0.9,ha:101.2,pl:82.1,gl:24.5},
   {n:'101st',pov:20.7,fa:49.3,ma:72.5,ta:121.8,fs:40.5,sh:1.5,ha:156.0,pl:117.1,gl:24.4},
@@ -134,8 +123,6 @@ const PC = [
 const K7 = ['BU','FA','GA','GL','MU','RA','RO'];
 const CC = {BU:'#394882',FA:'#e7466d',GA:'#9b9fbc',GL:'#ff7c53',MU:'#050507',RA:'#cea9be',RO:'#217ebe'};
 const CL = {BU:'Burglary',FA:'Fel. Assault',GA:'Grand Larceny Auto',GL:'Grand Larceny',MU:'Murder',RA:'Rape',RO:'Robbery'};
-const BC = {Bx:'#e7466d',Bk:'#394882',Mn:'#ff7c53',Qn:'#707175',SI:'#9b9fbc'};
-const BL = {Bx:'Bronx',Bk:'Brooklyn',Mn:'Manhattan',Qn:'Queens',SI:'Staten Island'};
 
 const GITHUB_USER = "joshgreenman1973";
 const REPO_NAME = "nypd-compstat-scraper";
@@ -268,11 +255,6 @@ const renderMarkdown = (node) => {
   }
   return node;
 };
-
-// Historic Layout Components
-const SL=({children})=><div style={{fontSize:10,letterSpacing:'0.14em',textTransform:'uppercase',color:'#ff7c53',marginBottom:6,fontWeight:700}}>{children}</div>;
-const H2=({children})=><h2 style={{fontSize:19,fontWeight:800,margin:'0 0 6px',letterSpacing:'-0.01em',lineHeight:1.2}}>{children}</h2>;
-const Ds=({children})=><p style={{fontSize:13,color:'#555',margin:'0 0 18px',lineHeight:1.6}}>{children}</p>;
 
 // Icons
 const Icon = ({ children, size = 16, className = "" }) => (
@@ -456,7 +438,7 @@ SUMMARY TOTALS:
 ALL TRACKED OFFENSES:
 ${offenseLines}
 
-${driver ? `PRIMARY DRIVER OF CHANGE: ${driver.name} accounts for ${driver.share.toFixed(0)}% of the overall shift (${formatSignedInt(driver.diff)} incidents)` : ''}
+${driver ? `PRIMARY DRIVER OF CHANGE: ${driver.name} accounts for ${driver.share.toFixed(0)}% of the overall shift` : ''}
 ${localAnomaly ? `LOCAL ANOMALY: ${localAnomaly.name} rate (${localAnomaly.localRate.toFixed(1)}/10k) is ${localAnomaly.ratio.toFixed(1)}x the citywide average` : ''}
 ${localBrightSpot ? `LOCAL BRIGHT SPOT: ${localBrightSpot.name} rate (${localBrightSpot.localRate.toFixed(1)}/10k) is ${((1 - localBrightSpot.ratio) * 100).toFixed(0)}% below citywide average` : ''}${precinctTable}
 
@@ -606,10 +588,7 @@ export default function App() {
   const [showHelp, setShowHelp] = useState(false);
   const [fetchError, setFetchError] = useState(false);
 
-  const [sec, setSec] = useState('city');
-  const [sub, setSub] = useState('dna');
-  const [cY1, setCY1] = useState(1993);
-  const [cY2, setCY2] = useState(2025);
+  // Scatter plot state for Historic view
   const [xM, setXM] = useState('pov');
   const [yM, setYM] = useState('ta');
 
@@ -695,8 +674,6 @@ export default function App() {
       const d = felonies.reduce((p, c) => (Math.abs(c.diff) > Math.abs(p.diff) && Math.sign(c.diff) === Math.sign(mDiff)) ? c : p, {diff: 0});
       if (d && d.name) driverObj = { name: d.name, diff: d.diff, share: Math.abs((d.diff / mDiff) * 100) };
     }
-    const historicAnchor = felonies.filter(f => f.hist && typeof f.hist['31_yr_pct'] === 'number').reduce((p, c) => (!p || c.hist['31_yr_pct'] < p.hist['31_yr_pct']) ? c : p, null);
-    const notableTrends = all.filter(item => item.prior >= VOLATILITY_THRESHOLD && typeof item.pct === 'number').sort((a, b) => b.pct - a.pct);
     let localAnomaly = null, localBrightSpot = null;
     if (activeGeo !== 'citywide' && pop && citywideData) {
       let maxRatio = 0, minRatio = Infinity;
@@ -713,7 +690,7 @@ export default function App() {
         }
       });
     }
-    return { period: geoData.report_period || {}, felonies, minors, all, driver: driverObj, historicAnchor, topSurge: notableTrends[0], topDrop: notableTrends[notableTrends.length - 1], citywideRates, localAnomaly, localBrightSpot, totals: { mCur, mPri, pCur, vCur, mPct: calcPct(mCur, mPri) ?? 0, diff: mDiff, murder, shootingVic, citywideRate: (mCur / CITYWIDE_POPULATION) * 10000, lethalityRatio: murder > 0 ? (shootingVic / murder) : 0 } };
+    return { period: geoData.report_period || {}, felonies, minors, all, driver: driverObj, citywideRates, localAnomaly, localBrightSpot, totals: { mCur, mPri, pCur, vCur, mPct: calcPct(mCur, mPri) ?? 0, diff: mDiff, murder, shootingVic, citywideRate: (mCur / CITYWIDE_POPULATION) * 10000, lethalityRatio: murder > 0 ? (shootingVic / murder) : 0 } };
   }, [rawData, activeTab, activeGeo]);
 
   const hotspots = useMemo(() => {
@@ -773,7 +750,7 @@ export default function App() {
       }
       cards.push({ id: 'lethality', icon: AlertCircle, title: 'The Lethality Gap', content: `For every **1 homicide**, there were **${totals.lethalityRatio.toFixed(1)} shooting victims**. (A widening gap often points to improved trauma care rather than fewer street shootings).` });
     } else {
-      if (driver && driver.share >= 25) cards.push({ id: 'local_driver', icon: Target, title: 'Local Driver', content: `The change in **${driver.name}** volume (shifting by ${formatSignedInt(driver.diff)} incidents) accounts for **${driver.share.toFixed(0)}%** of this area's trajectory.` });
+      if (driver && driver.share >= 25) cards.push({ id: 'local_driver', icon: Target, title: 'Local Driver', content: `The change in **${driver.name}** volume accounts for **${driver.share.toFixed(0)}%** of this area's trajectory.` });
       if (localAnomaly && !isTouristPrecinct) cards.push({ id: 'anomaly', icon: AlertTriangle, title: 'Elevated Local Risk', content: `The rate for **${localAnomaly.name}** here is **${localAnomaly.localRate.toFixed(1)} per 10k residents**, which is **${localAnomaly.ratio.toFixed(1)}x** higher than the citywide average (${localAnomaly.cityRate.toFixed(1)}).` });
       else if (topSurge && topSurge.pct > 0) cards.push({ id: 'surge', icon: TrendingUp, title: 'Local Trajectory', content: `**${topSurge.name}** index offenses have increased by **${topSurge.pct.toFixed(1)}%** compared to last year.` });
       if (localBrightSpot && !isTouristPrecinct) cards.push({ id: 'brightspot', icon: ShieldCheck, title: 'Local Bright Spot', content: `The rate of **${localBrightSpot.name}** offenses here sits **${((1 - localBrightSpot.ratio)*100).toFixed(0)}% below** the citywide average.` });
@@ -786,236 +763,163 @@ export default function App() {
   const risingOffenses = useMemo(() => parsedData.all.filter(o => o.pct > 0).sort((a, b) => b.pct - a.pct) || [], [parsedData.all]);
   const fallingOffenses = useMemo(() => parsedData.all.filter(o => o.pct < 0).sort((a, b) => a.pct - b.pct) || [], [parsedData.all]);
 
-  const comp = useMemo(()=>CW.map(d=>{const t=K7.reduce((s,c)=>s+d[c],0);const o={y:d.y,total:t};K7.forEach(c=>{o[c+'p']=d[c]/t*100;});return o;}),[]);
-  const idx = useMemo(()=>{const b=CW[0];return CW.map(d=>{const o={y:d.y};K7.forEach(c=>{o[c]=d[c]/b[c]*100;});return o;});},[]);
+  // Historic View Memos
   const vp = useMemo(()=>{const vC=['FA','MU','RA','RO'],pC=['BU','GA','GL'];return CW.map(d=>({y:d.y,violent:vC.reduce((s,c)=>s+d[c],0),property:pC.reduce((s,c)=>s+d[c],0)}));},[]);
-  const cmpD = useMemo(()=>{const d1=CW.find(d=>d.y===cY1),d2=CW.find(d=>d.y===cY2);if(!d1||!d2)return[];return K7.map(c=>({cat:CL[c],from:d1[c],to:d2[c],diff:d2[c]-d1[c],pct:(d2[c]-d1[c])/d1[c]*100})).sort((a,b)=>a.pct-b.pct);},[cY1,cY2]);
+  const idx = useMemo(()=>{const b=CW[0];return CW.map(d=>{const o={y:d.y};K7.forEach(c=>{o[c]=d[c]/b[c]*100;});return o;});},[]);
   const assaultD = useMemo(()=>CW.filter(d=>d.y>=2000&&d.y<=2024).map(d=>{const ma=MA_CW[d.y]||0;return{y:d.y,fa:d.FA,ma,total:d.FA+ma,faPct:d.FA/(d.FA+ma)*100};}),[]);
-  
-  const sections = [
-    {id:'city',l:'Citywide Trends',subs:[{id:'dna',l:'Crime DNA'},{id:'speed',l:'Seven Speeds'},{id:'phase',l:'Three Declines'},{id:'boro',l:'Boroughs'},{id:'cmp',l:'Compare'}]},
-    {id:'assault',l:'The Assault Story',subs:[{id:'full',l:'Full Picture'},{id:'share',l:'Felony Share'},{id:'cliff',l:'The 2015 Cliff'},{id:'ratio',l:'Assault ÷ Murder'}]},
-    {id:'geo',l:'Geography',subs:[{id:'scatter',l:'Explorer'},{id:'quartile',l:'Poverty Gradient'},{id:'corr',l:'Correlations'},{id:'harass',l:'Harassment'}]}
-  ];
-  const curSec = sections.find(s=>s.id===sec);
+  const sd = useMemo(()=>PC.filter(p=>p.n!=='14th').map(p=>({...p,x:p[xM],y:p[yM]})), [xM, yM]);
+  const ms = [{k:'pov',l:'Poverty %'},{k:'ta',l:'Total assault'},{k:'fa',l:'Felony assault'},{k:'ma',l:'Misd. assault'},{k:'sh',l:'Shootings'},{k:'ha',l:'Harassment'},{k:'pl',l:'Petit larceny'},{k:'gl',l:'Grand larceny'},{k:'fs',l:'Felony share %'}];
 
   // ==========================================
   // HISTORIC VIEW RENDER
   // ==========================================
   if (appView === 'historic') {
     return (
-      <div style={{fontFamily:"'Helvetica Neue',Arial,sans-serif",color:'#050507',background:'#fff',minHeight:'100vh'}}>
-        <div style={{background:'#050507',padding:'24px 20px 18px',color:'#fff'}}>
-          <div style={{maxWidth:980,margin:'0 auto'}}>
-            <button onClick={() => setAppView('live')} style={{background:'none',border:'none',color:'#9b9fbc',cursor:'pointer',fontSize:11,textTransform:'uppercase',letterSpacing:'0.1em',display:'flex',alignItems:'center',gap:4,marginBottom:16,padding:0}}><ArrowLeft size={14} /> Back to Live Dashboard</button>
-            <h1 style={{fontSize:26,fontWeight:900,lineHeight:1.1,margin:'0 0 8px',letterSpacing:'-0.02em'}}>NYC Crime: The 30-Year View</h1>
-            <p style={{fontSize:13,color:'#9b9fbc',margin:0,lineHeight:1.45,maxWidth:640}}>Major felonies, misdemeanor assault, harassment, poverty, and precinct-level geography. What actually changed, what didn't, and what the standard narrative misses.</p>
-          </div>
+      <div className="min-h-screen bg-white text-black font-sans pb-20">
+        
+        {/* Header */}
+        <div className="bg-[#050507] text-white pt-12 pb-16 px-5 sm:px-8">
+           <div className="max-w-[1100px] mx-auto">
+              <button onClick={() => setAppView('live')} className="text-gray-400 hover:text-white uppercase tracking-widest text-[11px] font-bold flex items-center gap-2 mb-8 transition-colors"><ArrowLeft size={14}/> Back to Live Dashboard</button>
+              <h1 className="text-4xl md:text-5xl font-black tracking-tight mb-4 leading-tight font-serif">The 30-Year Transformation of NYC Crime</h1>
+              <p className="text-lg text-gray-400 font-serif max-w-3xl leading-relaxed">Beyond the weekly CompStat fluctuations lies a deeper story. Over three decades, the volume, composition, and geographic distribution of crime in New York City has fundamentally rewritten itself.</p>
+           </div>
         </div>
-        <div style={{background:'#050507',borderBottom:'2px solid #333'}}>
-          <div style={{maxWidth:980,margin:'0 auto',display:'flex'}}>
-            {sections.map(s=><button key={s.id} onClick={()=>{setSec(s.id);setSub(s.subs[0].id);}} style={{padding:'10px 18px',border:'none',cursor:'pointer',background:sec===s.id?'#fff':'transparent',color:sec===s.id?'#050507':'#9b9fbc',fontSize:12,fontWeight:sec===s.id?700:400,borderRadius:'4px 4px 0 0'}}>{s.l}</button>)}
+
+        <div className="max-w-[1100px] mx-auto px-5 sm:px-8 pt-12 space-y-24">
+
+          {/* Section 1: The Macro Trend */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-12 items-center">
+            <div className="lg:col-span-1 space-y-4">
+               <div className="text-[#ff7c53] text-[10px] font-black uppercase tracking-widest">Macro Volume</div>
+               <h2 className="text-2xl font-black leading-snug">The Great Decline & The Modern Rebound</h2>
+               <p className="text-gray-600 font-serif text-[15px] leading-relaxed">From 1993 to 2019, major index crime collapsed. But the decline wasn't uniform. Violent crime leveled off around 2010, while property crime continued to fall. Since 2019, both have trended upward, with violent crime reaching levels not seen since the early 2000s.</p>
+            </div>
+            <div className="lg:col-span-2 h-[350px]">
+               <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={vp.filter(d=>d.y>=2000)} margin={{top:5,right:5,left:10,bottom:0}}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#eee" vertical={false}/>
+                  <XAxis dataKey="y" tick={{fontSize:10}} stroke="#999" axisLine={false} tickLine={false}/>
+                  <YAxis tick={{fontSize:10}} stroke="#999" tickFormatter={v=>`${(v/1000).toFixed(0)}K`} axisLine={false} tickLine={false}/>
+                  <Tooltip content={({active,payload,label})=>{if(!active||!payload?.length)return null;return <div className="bg-white border border-gray-200 p-3 text-[11px] shadow-lg"><div className="font-bold mb-1">{label}</div>{payload.map((p,i)=><div key={i} style={{color:p.color}}>{p.name}: <strong className="text-black">{p.value.toLocaleString()}</strong></div>)}</div>;}}/>
+                  <Line type="monotone" dataKey="violent" name="Violent Index" stroke="#e7466d" strokeWidth={3} dot={false}/>
+                  <Line type="monotone" dataKey="property" name="Property Index" stroke="#394882" strokeWidth={3} dot={false}/>
+                  <Legend wrapperStyle={{fontSize:11}} iconType="circle"/>
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
           </div>
-        </div>
-        {curSec?.subs.length > 1 && <div style={{borderBottom:'2px solid #ddd',background:'#fff',position:'sticky',top:0,zIndex:10}}>
-          <div style={{maxWidth:980,margin:'0 auto',display:'flex',overflowX:'auto'}}>
-            {curSec?.subs.map(v=><button key={v.id} onClick={()=>setSub(v.id)} style={{padding:'10px 14px',border:'none',cursor:'pointer',whiteSpace:'nowrap',borderBottom:sub===v.id?'3px solid #ff7c53':'3px solid transparent',background:'none',fontSize:12,fontWeight:sub===v.id?700:400,color:sub===v.id?'#050507':'#707175'}}>{v.l}</button>)}
+
+          {/* Section 2: Crime DNA (100% Stacked) */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-12 items-center border-t border-gray-100 pt-16">
+            <div className="lg:col-span-2 h-[350px] order-2 lg:order-1">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={CW} stackOffset="expand" margin={{top:5,right:0,left:0,bottom:0}}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#eee" vertical={false}/>
+                  <XAxis dataKey="y" tick={{fontSize:10}} stroke="#999" axisLine={false} tickLine={false}/>
+                  <YAxis tick={{fontSize:10}} stroke="#999" tickFormatter={v=>`${(v*100).toFixed(0)}%`} axisLine={false} tickLine={false}/>
+                  <Tooltip content={({active,payload,label})=>{if(!active||!payload?.length)return null;return <div className="bg-white border border-gray-200 p-3 text-[11px] shadow-lg"><div className="font-bold mb-2">{label} Profile</div>{[...payload].reverse().map((p,i)=><div key={i} className="flex justify-between gap-4"><span style={{color:p.color}}>{CL[p.dataKey]}</span><span className="font-bold text-black">{(p.value*100).toFixed(1)}%</span></div>)}</div>;}}/>
+                  {K7.map(c=><Area key={c} type="monotone" dataKey={c} stackId="1" fill={CC[c]} stroke={CC[c]} fillOpacity={0.9}/>)}
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="lg:col-span-1 space-y-4 order-1 lg:order-2">
+               <div className="text-[#e7466d] text-[10px] font-black uppercase tracking-widest">Composition</div>
+               <h2 className="text-2xl font-black leading-snug">The DNA of Crime Has Mutated</h2>
+               <p className="text-gray-600 font-serif text-[15px] leading-relaxed">In 1993, Burglary and Auto Theft made up half of all major crime. Today, they account for barely a fifth. Meanwhile, Grand Larceny and Felony Assault have consumed the chart, now making up 64% of the entire index.</p>
+               <div className="flex flex-wrap gap-x-3 gap-y-2 mt-4">
+                 {K7.map(c=><div key={c} className="flex items-center gap-1.5 text-[10px] text-gray-500 uppercase tracking-wider"><div className="w-2 h-2 rounded-sm" style={{background:CC[c]}}/>{CL[c]}</div>)}
+               </div>
+            </div>
           </div>
-        </div>}
-        <div style={{maxWidth:980,margin:'0 auto',padding:'20px 20px 50px'}}>
 
-        {sec==='city'&&sub==='dna'&&<div>
-          <SL>Composition</SL><H2>The makeup of crime has transformed</H2>
-          <Ds>Grand larceny + felony assault now account for 64% of all major crime, up from 30% in 1993. Burglary and auto theft went from half to a fifth.</Ds>
-          <ResponsiveContainer width="100%" height={360}>
-            <AreaChart data={comp} margin={{top:5,right:0,left:0,bottom:0}}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#eee"/><XAxis dataKey="y" tick={{fontSize:10}} stroke="#999"/>
-              <YAxis tick={{fontSize:10}} stroke="#999" tickFormatter={v=>`${v.toFixed(0)}%`} domain={[0,100]}/>
-              <Tooltip content={({active,payload,label})=>{if(!active||!payload?.length)return null;return <div style={{background:'#fff',border:'1px solid #ddd',padding:'6px 10px',fontSize:11,boxShadow:'0 2px 8px rgba(0,0,0,0.08)'}}><div style={{fontWeight:700,marginBottom:3}}>{label}</div>{[...payload].reverse().map((p,i)=><div key={i} style={{display:'flex',justifyContent:'space-between',gap:12}}><span style={{color:p.color}}>{CL[p.dataKey.replace('p','')]}</span><span style={{fontWeight:600}}>{p.value.toFixed(1)}%</span></div>)}</div>;}}/>
-              {K7.map(c=><Area key={c} type="monotone" dataKey={c+'p'} stackId="1" fill={CC[c]} stroke={CC[c]} fillOpacity={0.85}/>)}
-            </AreaChart>
-          </ResponsiveContainer>
-          <div style={{display:'flex',flexWrap:'wrap',gap:'6px 14px',marginTop:12,justifyContent:'center'}}>{K7.map(c=><div key={c} style={{display:'flex',alignItems:'center',gap:4,fontSize:10}}><div style={{width:8,height:8,background:CC[c],borderRadius:2}}/>{CL[c]}</div>)}</div>
-        </div>}
-
-        {sec==='city'&&sub==='speed'&&<div>
-          <SL>Divergence</SL><H2>Seven crimes, seven completely different trajectories</H2>
-          <Ds>Indexed to 1993=100. Auto theft and burglary collapsed ~88%. Murder fell 84%. Felony assault dropped only 27% and is climbing.</Ds>
-          <ResponsiveContainer width="100%" height={380}>
-            <LineChart data={idx} margin={{top:5,right:5,left:-10,bottom:0}}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#eee"/><XAxis dataKey="y" tick={{fontSize:10}} stroke="#999"/>
-              <YAxis tick={{fontSize:10}} stroke="#999" domain={[0,160]}/><ReferenceLine y={100} stroke="#ccc" strokeDasharray="4 4"/>
-              <Tooltip content={({active,payload,label})=>{if(!active||!payload?.length)return null;const s=[...payload].sort((a,b)=>b.value-a.value);return <div style={{background:'#fff',border:'1px solid #ddd',padding:'6px 10px',fontSize:11,boxShadow:'0 2px 8px rgba(0,0,0,0.08)'}}><div style={{fontWeight:700,marginBottom:3}}>{label}</div>{s.map((p,i)=><div key={i} style={{display:'flex',justifyContent:'space-between',gap:10}}><span style={{color:p.color}}>{CL[p.dataKey]}</span><span style={{fontWeight:600}}>{Number(p.value).toFixed(0)}</span></div>)}</div>;}}/>
-              {K7.map(c=><Line key={c} type="monotone" dataKey={c} stroke={CC[c]} strokeWidth={2.5} dot={false}/>)}
-            </LineChart>
-          </ResponsiveContainer>
-        </div>}
-
-        {sec==='city'&&sub==='phase'&&<div>
-          <SL>Trajectory</SL><H2>The decline happened in three acts — and a rebound</H2>
-          <ResponsiveContainer width="100%" height={260}>
-            <LineChart data={vp.filter(d=>d.y>=2005)} margin={{top:5,right:5,left:10,bottom:0}}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#eee"/><XAxis dataKey="y" tick={{fontSize:10}} stroke="#999"/>
-              <YAxis tick={{fontSize:10}} stroke="#999" tickFormatter={v=>`${(v/1000).toFixed(0)}K`}/>
-              <Tooltip content={({active,payload,label})=>{if(!active||!payload?.length)return null;return <div style={{background:'#fff',border:'1px solid #ddd',padding:'6px 10px',fontSize:11}}><div style={{fontWeight:700}}>{label}</div>{payload.map((p,i)=><div key={i} style={{color:p.color}}>{p.name}: <strong>{p.value.toLocaleString()}</strong></div>)}</div>;}}/>
-              <Line type="monotone" dataKey="violent" name="Violent" stroke="#e7466d" strokeWidth={2.5} dot={{r:2}}/>
-              <Line type="monotone" dataKey="property" name="Property" stroke="#394882" strokeWidth={2.5} dot={{r:2}}/>
-              <Legend wrapperStyle={{fontSize:11}}/>
-            </LineChart>
-          </ResponsiveContainer>
-        </div>}
-
-        {sec==='city'&&sub==='boro'&&<div>
-          <SL>Boroughs</SL><H2>The Bronx divergence</H2>
-          <Ds>In 1993, Manhattan led at 769/10K. By 2025, the Bronx (210/10K) has the highest rate.</Ds>
-          <ResponsiveContainer width="100%" height={360}>
-            <LineChart data={BP} margin={{top:5,right:10,left:0,bottom:0}}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#eee"/><XAxis dataKey="y" tick={{fontSize:10}} stroke="#999"/>
-              <YAxis tick={{fontSize:10}} stroke="#999" />
-              <Tooltip content={({active,payload,label})=>{if(!active||!payload?.length)return null;const s=[...payload].sort((a,b)=>b.value-a.value);return <div style={{background:'#fff',border:'1px solid #ddd',padding:'6px 10px',fontSize:11}}><div style={{fontWeight:700,marginBottom:3}}>{label}</div>{s.map((p,i)=><div key={i} style={{display:'flex',justifyContent:'space-between',gap:10}}><span style={{color:p.color}}>{BL[p.dataKey]||p.dataKey}</span><span style={{fontWeight:600}}>{p.value}</span></div>)}</div>;}}/>
-              {Object.entries(BC).map(([k,c])=><Line key={k} type="monotone" dataKey={k} stroke={c} strokeWidth={k==='Bx'?3:2} dot={{r:2.5,fill:c}}/>)}
-              <Legend formatter={v=>BL[v]||v} wrapperStyle={{fontSize:11}}/>
-            </LineChart>
-          </ResponsiveContainer>
-        </div>}
-
-        {sec==='city'&&sub==='cmp'&&<div>
-          <SL>Tool</SL><H2>Compare any two years</H2>
-          <div style={{display:'flex',gap:12,marginBottom:20,flexWrap:'wrap',alignItems:'flex-end'}}>
-            <div><label style={{fontSize:10,textTransform:'uppercase',letterSpacing:'0.1em',color:'#707175',display:'block',marginBottom:3}}>From</label>
-              <select value={cY1} onChange={e=>setCY1(+e.target.value)} style={{padding:'4px 8px',border:'1px solid #ddd',borderRadius:4,fontSize:12}}>{CW.map(d=><option key={d.y} value={d.y}>{d.y}</option>)}</select></div>
-            <div><label style={{fontSize:10,textTransform:'uppercase',letterSpacing:'0.1em',color:'#707175',display:'block',marginBottom:3}}>To</label>
-              <select value={cY2} onChange={e=>setCY2(+e.target.value)} style={{padding:'4px 8px',border:'1px solid #ddd',borderRadius:4,fontSize:12}}>{CW.map(d=><option key={d.y} value={d.y}>{d.y}</option>)}</select></div>
+          {/* Section 3: Divergence */}
+          <div className="border-t border-gray-100 pt-16 space-y-6">
+             <div className="max-w-3xl">
+               <div className="text-[#394882] text-[10px] font-black uppercase tracking-widest">Divergence</div>
+               <h2 className="text-2xl font-black leading-snug mb-3">Seven Crimes, Seven Trajectories</h2>
+               <p className="text-gray-600 font-serif text-[15px] leading-relaxed">If we index all crimes to their 1993 levels (where 1993 = 100), the divergence is stark. Property crimes like auto theft collapsed by nearly 90%. Murder fell 84%. But felony assault dropped only 27% at its lowest point, and has now rebounded aggressively to become the statistical outlier.</p>
+             </div>
+             <div className="h-[450px] w-full pt-4">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={idx} margin={{top:5,right:5,left:-10,bottom:0}}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#eee" vertical={false}/>
+                    <XAxis dataKey="y" tick={{fontSize:10}} stroke="#999" axisLine={false} tickLine={false}/>
+                    <YAxis tick={{fontSize:10}} stroke="#999" domain={[0,160]} axisLine={false} tickLine={false}/>
+                    <ReferenceLine y={100} stroke="#050507" strokeDasharray="4 4" strokeOpacity={0.3}/>
+                    <Tooltip content={({active,payload,label})=>{if(!active||!payload?.length)return null;const s=[...payload].sort((a,b)=>b.value-a.value);return <div className="bg-white border border-gray-200 p-3 text-[11px] shadow-lg"><div className="font-bold mb-2">{label} (vs 1993)</div>{s.map((p,i)=><div key={i} className="flex justify-between gap-4"><span style={{color:p.color}}>{CL[p.dataKey]}</span><span className="font-bold text-black">{Number(p.value).toFixed(0)}</span></div>)}</div>;}}/>
+                    {K7.map(c=><Line key={c} type="monotone" dataKey={c} stroke={CC[c]} strokeWidth={c==='FA'?4:1.5} strokeOpacity={c==='FA'?1:0.3} dot={false}/>)}
+                  </LineChart>
+                </ResponsiveContainer>
+             </div>
           </div>
-          <table style={{width:'100%',borderCollapse:'collapse',fontSize:11,marginTop:16}}>
-            <thead><tr style={{borderBottom:'2px solid #050507'}}><th style={{textAlign:'left',padding:'5px 6px'}}>Crime</th><th style={{textAlign:'right',padding:'5px 6px'}}>{cY1}</th><th style={{textAlign:'right',padding:'5px 6px'}}>{cY2}</th><th style={{textAlign:'right',padding:'5px 6px'}}>%</th></tr></thead>
-            <tbody>{cmpD.map((d,i)=><tr key={i} style={{borderBottom:'1px solid #eee'}}><td style={{padding:'4px 6px'}}>{d.cat}</td><td style={{padding:'4px 6px',textAlign:'right'}}>{d.from.toLocaleString()}</td><td style={{padding:'4px 6px',textAlign:'right'}}>{d.to.toLocaleString()}</td><td style={{padding:'4px 6px',textAlign:'right',fontWeight:700,color:d.pct>0?'#e7466d':'#217ebe'}}>{d.pct>0?'+':''}{d.pct.toFixed(1)}%</td></tr>)}</tbody>
-          </table>
-        </div>}
 
-        {sec==='assault'&&sub==='full'&&<div>
-          <SL>Volume</SL><H2>77,190 total assaults in 2024</H2>
-          <ResponsiveContainer width="100%" height={340}>
-            <AreaChart data={assaultD} margin={{top:5,right:5,left:10,bottom:0}}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#eee"/><XAxis dataKey="y" tick={{fontSize:10}} stroke="#999"/>
-              <YAxis tick={{fontSize:10}} stroke="#999" tickFormatter={v=>`${(v/1000).toFixed(0)}K`}/>
-              <Tooltip content={({active,payload})=>{if(!active||!payload?.length)return null;const d=payload[0]?.payload;return <div style={{background:'#fff',border:'1px solid #ddd',padding:'6px 10px',fontSize:11}}><div style={{fontWeight:700,marginBottom:3}}>{d.y}</div><div style={{color:'#e7466d'}}>Felony: {d.fa.toLocaleString()}</div><div style={{color:'#ff7c53'}}>Misdemeanor: {d.ma.toLocaleString()}</div></div>;}}/>
-              <Area type="monotone" dataKey="fa" stackId="1" fill="#e7466d" stroke="#e7466d" fillOpacity={0.85} name="Felony"/>
-              <Area type="monotone" dataKey="ma" stackId="1" fill="#ff7c53" stroke="#ff7c53" fillOpacity={0.45} name="Misdemeanor"/>
-              <Legend wrapperStyle={{fontSize:11}}/>
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>}
-
-        {sec==='assault'&&sub==='share'&&<div>
-          <SL>Composition</SL><H2>Felony's share of all assaults jumped</H2>
-          <ResponsiveContainer width="100%" height={320}>
-            <AreaChart data={assaultD} margin={{top:5,right:5,left:0,bottom:0}}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#eee"/><XAxis dataKey="y" tick={{fontSize:10}} stroke="#999"/>
-              <YAxis tick={{fontSize:10}} stroke="#999" domain={[0,100]}/>
-              <Tooltip content={({active,payload})=>{if(!active||!payload?.length)return null;const d=payload[0]?.payload;return <div style={{background:'#fff',border:'1px solid #ddd',padding:'6px 10px',fontSize:11}}><div style={{fontWeight:700}}>{d.y}</div><div style={{color:'#e7466d'}}>Felony: {d.faPct.toFixed(1)}%</div></div>;}}/>
-              <Area type="monotone" dataKey="faPct" stackId="1" fill="#e7466d" stroke="#e7466d" />
-              <Area type="monotone" dataKey={(d)=>100-d.faPct} stackId="1" fill="#ff7c53" stroke="#ff7c53" fillOpacity={0.35}/>
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>}
-
-        {sec==='assault'&&sub==='cliff'&&<div>
-          <SL>Anomaly</SL><H2>The 2015 Misdemeanor Cliff</H2>
-          <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={assaultD.filter(d=>d.y>=2010)} margin={{top:5,right:5,left:10,bottom:0}}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#eee"/><XAxis dataKey="y" tick={{fontSize:10}} stroke="#999"/>
-              <YAxis tick={{fontSize:10}} stroke="#999" tickFormatter={v=>`${(v/1000).toFixed(0)}K`}/>
-              <Line type="monotone" dataKey="fa" stroke="#e7466d" strokeWidth={2.5} dot={{r:2.5}} name="Felony"/>
-              <Line type="monotone" dataKey="ma" stroke="#ff7c53" strokeWidth={2.5} dot={{r:2.5}} name="Misd."/>
-              <ReferenceLine x={2015} stroke="#999" strokeDasharray="4 4"/><ReferenceLine x={2020} stroke="#999" strokeDasharray="4 4"/>
-              <Legend wrapperStyle={{fontSize:11}}/>
-            </LineChart>
-          </ResponsiveContainer>
-        </div>}
-
-        {sec==='assault'&&sub==='ratio'&&<div>
-          <SL>Hidden signal</SL><H2>Ratio of assaults to murders</H2>
-          {(()=>{const rd=CW.map(d=>{const ma=MA_CW[d.y]||0;return{y:d.y,faRatio:d.FA/d.MU,totalRatio:d.y>=2000&&ma>0?(d.FA+ma)/d.MU:null};});
-          return <ResponsiveContainer width="100%" height={320}>
-            <LineChart data={rd} margin={{top:5,right:5,left:-5,bottom:0}}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#eee"/><XAxis dataKey="y" tick={{fontSize:10}} stroke="#999"/>
-              <YAxis tick={{fontSize:10}} stroke="#999" />
-              <Line type="monotone" dataKey="faRatio" stroke="#e7466d" strokeWidth={2.5} dot={false} name="Felony assault : murder"/>
-              <Line type="monotone" dataKey="totalRatio" stroke="#ff7c53" strokeWidth={2} strokeDasharray="5 3" dot={false} name="All assault : murder"/>
-              <Legend wrapperStyle={{fontSize:11}}/>
-            </LineChart>
-          </ResponsiveContainer>;})()}
-        </div>}
-
-        {sec==='geo'&&sub==='scatter'&&(()=>{
-          const ms=[{k:'pov',l:'Poverty %'},{k:'ta',l:'Total assault'},{k:'fa',l:'Felony assault'},{k:'ma',l:'Misd. assault'},{k:'sh',l:'Shootings'},{k:'ha',l:'Harassment'},{k:'pl',l:'Petit larceny'},{k:'gl',l:'Grand larceny'},{k:'fs',l:'Felony share %'}];
-          const sd=PC.filter(p=>p.n!=='14th').map(p=>({...p,x:p[xM],y:p[yM]}));
-          return <div>
-          <SL>Explorer</SL><H2>76 precincts: map any metric against any other</H2>
-          <div style={{display:'flex',gap:12,marginBottom:12,flexWrap:'wrap',fontSize:11}}>
-            <div><label style={{fontSize:10,textTransform:'uppercase',letterSpacing:'0.1em',color:'#707175',display:'block',marginBottom:2}}>X</label>
-              <select value={xM} onChange={e=>setXM(e.target.value)} style={{padding:'3px 6px',border:'1px solid #ddd',borderRadius:4,fontSize:11}}>{ms.map(m=><option key={m.k} value={m.k}>{m.l}</option>)}</select></div>
-            <div><label style={{fontSize:10,textTransform:'uppercase',letterSpacing:'0.1em',color:'#707175',display:'block',marginBottom:2}}>Y</label>
-              <select value={yM} onChange={e=>setYM(e.target.value)} style={{padding:'3px 6px',border:'1px solid #ddd',borderRadius:4,fontSize:11}}>{ms.map(m=><option key={m.k} value={m.k}>{m.l}</option>)}</select></div>
+          {/* Section 4: The Assault Anomaly */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 border-t-[3px] border-black pt-16">
+            <div className="space-y-4">
+               <div className="text-[#050507] text-[10px] font-black uppercase tracking-widest">Classification Shift</div>
+               <h2 className="text-2xl font-black leading-snug">The Assault Anomaly</h2>
+               <p className="text-gray-600 font-serif text-[15px] leading-relaxed mb-4">While felony assault dominates headlines, misdemeanor assault outnumbers it 1.6 to 1. In 2015, misdemeanor assaults dropped 21% overnight while felonies didn't budge—a clear indicator of classification changes rather than behavioral shifts.</p>
+               <p className="text-gray-600 font-serif text-[15px] leading-relaxed">Since 2020, both categories have begun rising in lockstep for the first time in the dataset, suggesting a genuine increase in violent contact rather than just administrative drift.</p>
+            </div>
+            <div className="h-[350px]">
+               <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={assaultD} margin={{top:5,right:5,left:0,bottom:0}}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#eee" vertical={false}/>
+                  <XAxis dataKey="y" tick={{fontSize:10}} stroke="#999" axisLine={false} tickLine={false}/>
+                  <YAxis tick={{fontSize:10}} stroke="#999" tickFormatter={v=>`${(v/1000).toFixed(0)}K`} axisLine={false} tickLine={false}/>
+                  <Tooltip content={({active,payload})=>{if(!active||!payload?.length)return null;const d=payload[0]?.payload;return <div className="bg-white border border-gray-200 p-3 text-[11px] shadow-lg"><div className="font-bold mb-2">{d.y} Assaults</div><div className="text-[#ff7c53]">Misdemeanor: {d.ma.toLocaleString()}</div><div className="text-[#e7466d]">Felony: {d.fa.toLocaleString()}</div><div className="font-bold text-black mt-2 pt-2 border-t border-gray-100">Total: {d.total.toLocaleString()}</div></div>;}}/>
+                  <Bar dataKey="ma" stackId="a" fill="#ff7c53" fillOpacity={0.6} name="Misdemeanor" />
+                  <Bar dataKey="fa" stackId="a" fill="#e7466d" fillOpacity={0.9} name="Felony" />
+                  <Legend wrapperStyle={{fontSize:11}} iconType="circle"/>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
           </div>
-          <ResponsiveContainer width="100%" height={380}>
-            <ScatterChart margin={{top:10,right:10,left:10,bottom:10}}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#eee"/>
-              <XAxis dataKey="x" type="number" tick={{fontSize:10}} stroke="#999" name={ms.find(m=>m.k===xM)?.l} />
-              <YAxis dataKey="y" type="number" tick={{fontSize:10}} stroke="#999" name={ms.find(m=>m.k===yM)?.l} />
-              <Tooltip content={({active,payload})=>{if(!active||!payload?.length)return null;const d=payload[0].payload;return <div style={{background:'#fff',border:'1px solid #ddd',padding:'6px 10px',fontSize:11}}><div style={{fontWeight:700,marginBottom:3}}>{d.n} Pct</div><div>Poverty: {d.pov}%</div><div>Fel. Assault: {d.fa}/10K</div></div>;}}/>
-              <Scatter data={sd} fill="#e7466d" fillOpacity={0.6} stroke="#e7466d" strokeOpacity={0.3}/>
-            </ScatterChart>
-          </ResponsiveContainer>
-        </div>;})()}
 
-        {sec==='geo'&&sub==='quartile'&&<div>
-          <SL>Poverty gradient</SL><H2>What poverty predicts — and what it doesn't</H2>
-          <div style={{overflowX:'auto'}}>
-            <table style={{borderCollapse:'collapse',fontSize:11,width:'100%',minWidth:680}}>
-              <thead><tr>
-                <th style={{textAlign:'left',padding:'6px',borderBottom:'2px solid #050507',fontSize:10}}>Quartile</th>
-                <th style={{textAlign:'center',padding:'6px',borderBottom:'2px solid #050507',fontSize:10}}>Poverty</th>
-                <th style={{textAlign:'center',padding:'6px',borderBottom:'2px solid #050507',fontSize:10,color:'#e7466d'}}>Fel. Aslt</th>
-                <th style={{textAlign:'center',padding:'6px',borderBottom:'2px solid #050507',fontSize:10,color:'#217ebe'}}>Grand Larc</th>
-              </tr></thead>
-              <tbody>{[
-                {q:'Q1: Lowest',pov:'8.4%',fa:18.0,gl:65.1},
-                {q:'Q2: Low-mid',pov:'13.3%',fa:40.0,gl:94.8},
-                {q:'Q3: Mid-high',pov:'19.0%',fa:35.3,gl:49.2},
-                {q:'Q4: Highest',pov:'30.3%',fa:60.7,gl:65.3},
-              ].map((q,i)=><tr key={i} style={{borderBottom:'1px solid #eee',background:i===3?'rgba(231,70,109,0.04)':'transparent'}}>
-                <td style={{padding:'6px',fontWeight:600}}>{q.q}</td>
-                <td style={{textAlign:'center',padding:'6px',fontWeight:700}}>{q.pov}</td>
-                <td style={{textAlign:'center',padding:'6px',fontWeight:700,color:'#e7466d'}}>{q.fa}</td>
-                <td style={{textAlign:'center',padding:'6px',color:'#217ebe',fontWeight:700}}>{q.gl}</td>
-              </tr>)}</tbody>
-            </table>
+          {/* Section 5: Precinct Scatter */}
+          <div className="border-t border-gray-200 pt-16 space-y-8">
+             <div className="flex flex-col md:flex-row justify-between md:items-end gap-6">
+               <div className="max-w-2xl space-y-4">
+                 <div className="text-[#9b9fbc] text-[10px] font-black uppercase tracking-widest">Geographic Reality</div>
+                 <h2 className="text-2xl font-black leading-snug">Poverty Predicts Violence, Not Theft</h2>
+                 <p className="text-gray-600 font-serif text-[15px] leading-relaxed">Mapping the 76 standard precincts reveals three distinct clusters: Violence, Disorder, and Theft. Poverty is strongly correlated with violence (shootings, murder, felony assault) but has virtually zero correlation with theft (grand and petit larceny), which maps closer to foot traffic and retail density.</p>
+               </div>
+               
+               {/* Controls */}
+               <div className="flex flex-wrap gap-4 bg-gray-50 p-4 rounded-lg border border-gray-200 self-start md:self-end">
+                 <div>
+                   <label className="text-[10px] font-black uppercase tracking-widest text-gray-500 block mb-1.5">X-Axis</label>
+                   <select value={xM} onChange={e=>setXM(e.target.value)} className="bg-white border border-gray-300 text-xs py-1.5 px-2 rounded focus:outline-none focus:border-black">
+                     {ms.map(m=><option key={m.k} value={m.k}>{m.l}</option>)}
+                   </select>
+                 </div>
+                 <div>
+                   <label className="text-[10px] font-black uppercase tracking-widest text-gray-500 block mb-1.5">Y-Axis</label>
+                   <select value={yM} onChange={e=>setYM(e.target.value)} className="bg-white border border-gray-300 text-xs py-1.5 px-2 rounded focus:outline-none focus:border-black">
+                     {ms.map(m=><option key={m.k} value={m.k}>{m.l}</option>)}
+                   </select>
+                 </div>
+               </div>
+             </div>
+             
+             <div className="h-[500px] w-full bg-white">
+                <ResponsiveContainer width="100%" height="100%">
+                  <ScatterChart margin={{top:10,right:10,left:10,bottom:10}}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#eee"/>
+                    <XAxis dataKey="x" type="number" tick={{fontSize:10}} stroke="#999" name={ms.find(m=>m.k===xM)?.l} label={{value:ms.find(m=>m.k===xM)?.l,position:'bottom',fontSize:11,fill:'#555',offset:-5, fontWeight:'bold'}}/>
+                    <YAxis dataKey="y" type="number" tick={{fontSize:10}} stroke="#999" name={ms.find(m=>m.k===yM)?.l} label={{value:ms.find(m=>m.k===yM)?.l,angle:-90,position:'insideLeft',fontSize:11,fill:'#555', fontWeight:'bold'}}/>
+                    <Tooltip content={({active,payload})=>{if(!active||!payload?.length)return null;const d=payload[0].payload;return <div className="bg-white border border-gray-200 p-3 text-[11px] shadow-lg"><div className="font-bold text-black mb-2 pb-2 border-b border-gray-100">{d.n} Precinct</div><div className="text-gray-600 mb-1">{ms.find(m=>m.k===xM)?.l}: <span className="font-bold text-black">{d.x}</span></div><div className="text-gray-600">{ms.find(m=>m.k===yM)?.l}: <span className="font-bold text-black">{d.y}</span></div></div>;}}/>
+                    <Scatter data={sd} fill="#e7466d" fillOpacity={0.6} stroke="#e7466d" strokeOpacity={0.3}/>
+                  </ScatterChart>
+                </ResponsiveContainer>
+             </div>
           </div>
-        </div>}
 
-        {sec==='geo'&&sub==='corr'&&<div>
-          <SL>Relationships</SL><H2>Three clusters hiding in the data</H2>
-          <Ds>Correlation coefficients across 76 precincts. High r = strong co-occurrence.</Ds>
-          {[
-            {l:'Crime × Crime (strongest pairs)',d:[
-              {p:'Petit Larceny × Grand Larceny',r:0.965},{p:'Fel. Assault × Misd. Assault',r:0.929}
-            ]}
-          ].map((g,gi)=><div key={gi} style={{marginBottom:20}}>
-            <div style={{fontSize:12,fontWeight:700,marginBottom:6}}>{g.l}</div>
-            {g.d.map((c,i)=><div key={i} style={{display:'flex',alignItems:'center',gap:6,marginBottom:3}}>
-              <div style={{width:200,fontSize:11,textAlign:'right',flexShrink:0}}>{c.p}</div>
-              <div style={{flex:1,height:18,background:'#f0f0f0',borderRadius:3,position:'relative'}}><div style={{position:'absolute',left:0,top:0,height:'100%',width:`${Math.abs(c.r)*100}%`,background:c.r>0.85?'#e7466d':'#217ebe',borderRadius:3,opacity:0.7}}/></div>
-              <div style={{width:45,fontSize:11,fontWeight:700,flexShrink:0,color:c.r>0?'#050507':'#217ebe'}}>{c.r>0?'+':''}{c.r.toFixed(2)}</div>
-            </div>)}
-          </div>)}
-        </div>}
-
-        {sec==='geo'&&sub==='harass'&&<div>
-          <SL>Hidden layer</SL><H2>85,381 harassment complaints</H2>
-          <Ds>Nearly 3× felony assault. It correlates with felony assault at r=0.93 — the single best predictor.</Ds>
-        </div>}
+          {/* Unified AI Query Box */}
+          <div className="pt-12 mt-20 border-t border-gray-200">
+             <QueryBox parsedData={parsedData} activeGeo={activeGeo} activeTab={activeTab} period={parsedData.period} rawData={rawData} />
+          </div>
 
         </div>
       </div>
