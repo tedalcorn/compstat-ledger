@@ -3,12 +3,8 @@
 @tailwind utilities;
 ```
 
-**Step 5: Test locally.** In Terminal: `npm start`. A browser window should open showing your dashboard. If the charts render and you can toggle Weekly/Yearly, you're good.
-
-**Step 6: Push to GitHub.** Create a new repo on github.com (call it `compstat-ledger` or whatever). Then in Terminal:
+Save it. Then in Terminal:
 ```
-git init
 git add .
-git commit -m "initial"
-git remote add origin https://github.com/joshgreenman1973/compstat-ledger.git
-git push -u origin main
+git commit -m "add tailwind"
+git push
