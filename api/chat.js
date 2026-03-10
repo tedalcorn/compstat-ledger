@@ -12,8 +12,8 @@ export default async function handler(req, res) {
         'anthropic-version': '2023-06-01'
       },
       body: JSON.stringify({
-        // Switched to the most universally accessible model ID
-        model: 'claude-3-5-sonnet-20240620', 
+        // Using the 2025 model ID from your code
+        model: 'claude-sonnet-4-20250514', 
         max_tokens: req.body.max_tokens || 1000,
         system: req.body.system,
         messages: req.body.messages
@@ -23,7 +23,6 @@ export default async function handler(req, res) {
     const data = await anthropicResponse.json();
 
     if (!anthropicResponse.ok) {
-      // This will print the FULL error from Anthropic in your Vercel logs
       console.error('Anthropic Error Detail:', JSON.stringify(data, null, 2));
       throw new Error(data.error?.message || 'Anthropic API error');
     }
