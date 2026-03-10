@@ -876,13 +876,13 @@ export default function App() {
             </div>
           </div>
 
-          {/* Section 5: Precinct Scatter */}
+     {/* Section 5: Precinct Scatter */}
           <div className="border-t border-gray-200 pt-16 space-y-8">
              <div className="flex flex-col md:flex-row justify-between md:items-end gap-6">
                <div className="max-w-2xl space-y-4">
                  <div className="text-[#9b9fbc] text-[10px] font-black uppercase tracking-widest">Geographic Reality</div>
-                 <h2 className="text-2xl font-black leading-snug">Poverty Predicts Violence, Not Theft</h2>
-                 <p className="text-gray-600 font-serif text-[15px] leading-relaxed">Mapping the 76 standard precincts reveals three distinct clusters: Violence, Disorder, and Theft. Poverty is strongly correlated with violence (shootings, murder, felony assault) but has virtually zero correlation with theft (grand and petit larceny), which maps closer to foot traffic and retail density.</p>
+                 <h2 className="text-2xl font-black leading-snug">The Complex Geography of Crime</h2>
+                 <p className="text-gray-600 font-serif text-[15px] leading-relaxed">Mapping the 76 standard precincts reveals distinct statistical clusters. In this specific dataset, poverty rates correlate strongly with violence (shootings, murder, felony assault). Conversely, theft (grand and petit larceny) shows virtually zero correlation with poverty, mapping closer to commercial density and foot traffic.</p>
                </div>
                
                {/* Controls */}
