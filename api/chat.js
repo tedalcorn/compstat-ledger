@@ -14,7 +14,7 @@ export default async function handler(req, res) {
       },
       body: JSON.stringify({
         // I updated this to the current stable Sonnet model, as the one in your App.js was invalid
-        model: 'claude-3-5-sonnet-20241022', 
+        model: 'claude-3-5-sonnet-latest', 
         max_tokens: req.body.max_tokens || 1000,
         system: req.body.system,
         messages: req.body.messages
