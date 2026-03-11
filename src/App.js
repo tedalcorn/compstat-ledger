@@ -802,9 +802,11 @@ const QueryBox = ({ parsedData, activeGeo, activeTab, period, rawData, priorYear
           return { pct, hood, total, pop: p, rate: p > 0 ? (total / p) * 100000 : 0 };
         }).filter(r => r.pop > 0 && !TOURIST_PRECINCTS.includes(r.pct)).sort((a, b) => b.rate - a.rate);
 
+        const avgRate = pctRates.reduce((s, r) => s + r.rate, 0) / (pctRates.length || 1);
         const top5 = pctRates.slice(0, 5).map(r => `  ${r.pct} (${r.hood}): ${r.rate.toFixed(0)}/100k (${r.total} incidents, pop ${formatPop(r.pop)})`).join('\n');
         const bot5 = pctRates.slice(-5).reverse().map(r => `  ${r.pct} (${r.hood}): ${r.rate.toFixed(0)}/100k (${r.total} incidents, pop ${formatPop(r.pop)})`).join('\n');
-        precinctSummary = `\nTOP 5 HIGHEST-RATE PRECINCTS (YTD major index per 100k):\n${top5}\n\nTOP 5 LOWEST-RATE PRECINCTS:\n${bot5}`;
+        const allPctLines = pctRates.map((r, i) => `  #${i + 1} ${r.pct} (${r.hood}): ${r.rate.toFixed(0)}/100k`).join('\n');
+        precinctSummary = `\nPRECINCT CRIME RATES (YTD major index per 100k, ranked highest to lowest, citywide avg: ${avgRate.toFixed(0)}/100k):\n${allPctLines}\n\nTOP 5 HIGHEST-RATE (detail):\n${top5}\n\nTOP 5 LOWEST-RATE (detail):\n${bot5}`;
       }
     }
 
@@ -855,29 +857,26 @@ ${JSON.stringify(CW)}
     setError('');
 
     const dataContext = buildContext();
-    const systemPrompt = `You are a concise, plain-language crime data analyst for the NYPD CompStat Ledger by Vital City. You have access to the COMPLETE dataset shown on the dashboard.
+    const systemPrompt = `You are a concise, plain-language crime data analyst for the NYPD CompStat Ledger by Vital City.
 
-ABSOLUTE RULE — NEVER MAKE ANYTHING UP:
-You must NEVER invent, estimate, extrapolate, or generate any number, statistic, or claim that is not explicitly present in the DATA section below. This is a hard rule with zero exceptions. If a user asks for a figure that is not in the data, you MUST say: "That figure isn't in the current dataset." Do NOT guess. Do NOT say "approximately" and then invent a number. Do NOT calculate figures the data doesn't support. Violating this rule produces misinformation about public safety.
+ABSOLUTE RULE #1 — NEVER FABRICATE:
+You must ONLY cite numbers that appear verbatim in the DATA section below. If a number is not there, say "That specific figure isn't in the current dataset." NEVER estimate. NEVER say "approximately." NEVER invent a number. NEVER extrapolate. NEVER use your training data for NYC crime statistics — the DATA section is your ONLY source of truth. Fabricating crime statistics is dangerous misinformation.
 
-ACCURACY RULES:
-- Use ONLY the exact numbers from the data. Do not round, re-derive, or recompute — pre-computed percentages and shares are provided, so cite them directly.
-- Both YTD and weekly data are provided. Use whichever timeframe the user asks about. If they don't specify, default to YTD.
-- For "share of total" or "percentage of crime" questions, use the pre-computed YTD SHARE OF TOTAL section.
-- For "how much did X change" questions, use the pre-computed change percentages.
-- When you are unsure whether a number in the data answers the user's question, say so rather than forcing a match.
+ABSOLUTE RULE #2 — NEVER DO ARITHMETIC:
+Do NOT add, subtract, multiply, or divide numbers yourself. All totals, percentages, shares, and rates are pre-computed in the DATA section. Use them exactly as given. If a pre-computed answer isn't provided, say so — do NOT attempt to calculate it.
 
-FORMAT: Answer in 2-4 sentences. Cite specific numbers. Never use bullet points or headers.
+ABSOLUTE RULE #3 — SAY "I DON'T KNOW":
+If you cannot find the answer in the DATA section, say "I don't have that in the current dataset" or "That isn't tracked here." NEVER fill the gap with a plausible-sounding answer. A wrong answer about crime data is far worse than "I don't know."
 
-EXAMPLES OF CORRECT BEHAVIOR:
-Q: "What were the total major index offenses for the week?"
-A: Use the WEEKLY SUMMARY line's exact total — do not add up individual offenses yourself.
+LOOKUP RULES:
+- Both YTD and weekly data are provided for every offense. Use whichever the user asks about; default to YTD if unspecified.
+- The "ALL TRACKED OFFENSES" section contains 18+ categories including retail theft, hate crimes, transit crimes, shooting incidents/victims, traffic fatalities, and more. Search it before saying data doesn't exist.
+- Precinct-level per-100k rates are provided for ALL precincts, ranked from highest to lowest, with a citywide average. Use these for any precinct question.
+- City comparison data (NYC vs other cities) is in the CITY COMPARISON section.
+- Historical annual data from 1993-2025 is in the HISTORICAL DATASETS section.
+- For "share of total" questions, use the YTD SHARE OF TOTAL section.
 
-Q: "What percentage of crime is robbery?"
-A: Use the pre-computed YTD SHARE OF TOTAL line for Robbery — do not divide yourself.
-
-Q: "What is the clearance rate for murder?"
-A: "That figure isn't in the current dataset. The dashboard tracks reported offenses but not clearance rates."`;
+FORMAT: Answer in 2-4 sentences. Cite exact numbers from the data. Never use bullet points or headers.`;
 
     const messages = [];
     history.forEach(h => {
@@ -895,6 +894,7 @@ A: "That figure isn't in the current dataset. The dashboard tracks reported offe
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           max_tokens: 1500,
+          temperature: 0,
           system: systemPrompt,
           messages
         })
