@@ -1429,14 +1429,13 @@ export default function App() {
                   <SearchIcon size={14} className="absolute left-3 top-[11px] pointer-events-none text-gray-400" />
                   <input
                     type="text"
-                    placeholder="Search neighborhood or precinct..."
-                    value={geoFocused ? searchQuery : ''}
+                    placeholder={geoFocused ? "Search neighborhood or precinct..." : ""}
+                    value={geoFocused ? searchQuery : (activeGeo === 'citywide' ? 'Citywide' : formatGeoName(activeGeo))}
                     onChange={e => setSearchQuery(e.target.value)}
-                    onFocus={() => { setGeoFocused(true); setSearchQuery(''); }}
+                    onFocus={e => { setGeoFocused(true); setSearchQuery(''); e.target.value = ''; }}
                     onBlur={() => setTimeout(() => { setGeoFocused(false); setSearchQuery(''); }, 200)}
                     className={`w-full text-[11px] font-black uppercase tracking-wider py-2.5 pl-9 pr-4 rounded border bg-white focus:outline-none ${geoFocused ? 'border-indigo-400' : 'border-gray-300'}`}
                   />
-                  {!geoFocused && <span className="absolute left-9 top-[10px] text-[11px] font-black uppercase tracking-wider text-black pointer-events-none">{activeGeo === 'citywide' ? 'Citywide' : formatGeoName(activeGeo)}</span>}
                   {geoFocused && (
                     <div className="absolute top-full left-0 w-full mt-1 bg-white border border-gray-200 shadow-xl rounded z-50 max-h-72 overflow-y-auto">
                       {geoSearchResults.showCitywide && (
@@ -1477,7 +1476,7 @@ export default function App() {
             </div>
             <div className="flex w-fit border border-black rounded overflow-hidden">
               <button onClick={() => setActiveTab('wtd')} className={`px-6 py-2 text-[10px] font-black uppercase tracking-widest ${activeTab === 'wtd' ? 'bg-black text-white' : 'bg-white'}`}>Weekly</button>
-              <button onClick={() => setActiveTab('ytd')} className={`px-6 py-2 text-[10px] font-black uppercase tracking-widest ${activeTab === 'ytd' ? 'bg-black text-white' : 'bg-white'}`}>Yearly</button>
+              <button onClick={() => setActiveTab('ytd')} className={`px-6 py-2 text-[10px] font-black uppercase tracking-widest ${activeTab === 'ytd' ? 'bg-black text-white' : 'bg-white'}`}>Year to Date</button>
             </div>
           </div>
         </header>
