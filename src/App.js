@@ -1962,11 +1962,14 @@ If you are not 100% certain the answer is in the DATA, say so. Never guess.
 FORMAT: Answer in 2-4 sentences. Cite exact numbers from the data. No bullet points or headers.`;
 
     const dataContext = buildAuditContext();
-    const results = [];
 
+    // Show overlay immediately with progress
+    setAuditResults({ progress: 0, total: tests.length, results: [], passed: 0, score: '0/' + tests.length, running: true });
+
+    const allResults = [];
     for (let i = 0; i < tests.length; i++) {
       const test = tests[i];
-      setAuditResults(prev => ({ ...prev, progress: i }));
+      let result;
       try {
         const res = await fetch('/api/chat', {
           method: 'POST',
@@ -1982,14 +1985,15 @@ FORMAT: Answer in 2-4 sentences. Cite exact numbers from the data. No bullet poi
         const data = await res.json();
         const answer = data?.content?.[0]?.text || '';
         const pass = test.validate(answer);
-        results.push({ ...test, answer, pass });
+        result = { ...test, answer, pass };
       } catch (e) {
-        results.push({ ...test, answer: `ERROR: ${e.message}`, pass: false });
+        result = { ...test, answer: `ERROR: ${e.message}`, pass: false };
       }
+      allResults.push(result);
+      const passed = allResults.filter(r => r.pass).length;
+      setAuditResults({ progress: i + 1, total: tests.length, results: [...allResults], passed, score: `${passed}/${tests.length}`, running: i < tests.length - 1 });
     }
 
-    const passed = results.filter(r => r.pass).length;
-    setAuditResults({ progress: tests.length, total: tests.length, results, passed, score: `${passed}/${tests.length}` });
     setAuditRunning(false);
   };
 
