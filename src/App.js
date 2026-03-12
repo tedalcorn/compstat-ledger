@@ -1082,6 +1082,8 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState("");
   const [showHelp, setShowHelp] = useState(false);
   const [fetchError, setFetchError] = useState(false);
+  const [auditRunning, setAuditRunning] = useState(false);
+  const [auditResults, setAuditResults] = useState(null);
 
   // Map & AI summary state
   const [mapCrime, setMapCrime] = useState('all');
@@ -1620,10 +1622,413 @@ ABSOLUTE RULES:
   }
 
   // ==========================================
+  // AUTO-AUDIT (admin only, triggered by ?audit=1)
+  // ==========================================
+  const showAuditBtn = new URLSearchParams(window.location.search).has('audit');
+
+  const runAudit = async () => {
+    if (auditRunning) return;
+    setAuditRunning(true);
+    setAuditResults({ progress: 0, total: 10, results: [] });
+
+    const cw = rawData?.['citywide'] || {};
+    const felonies = cw.seven_major_felonies || {};
+    const addl = cw.additional_stats || {};
+    const allCrimes = { ...felonies, ...addl };
+    const sn = (v) => { const n = Number(v); return isNaN(n) ? 0 : n; };
+
+    // Compute ground-truth values from rawData
+    const murderYTD = sn(felonies['Murder']?.year_to_date?.current_year);
+    const murderPriYTD = sn(felonies['Murder']?.year_to_date?.prior_year);
+
+    let ytdTotal = 0;
+    Object.values(felonies).forEach(s => { ytdTotal += sn(s?.year_to_date?.current_year); });
+
+    // Largest % increase across ALL offenses
+    const allChanges = Object.entries(allCrimes).map(([name, stats]) => {
+      const c = sn(stats?.year_to_date?.current_year);
+      const p = sn(stats?.year_to_date?.prior_year);
+      return { name, cur: c, pri: p, pct: p >= 10 ? ((c - p) / p) * 100 : null };
+    }).filter(o => o.pct !== null);
+    const topIncrease = [...allChanges].sort((a, b) => (b.pct || 0) - (a.pct || 0))[0];
+
+    // Most common crime (highest volume)
+    const allByVolume = Object.entries(allCrimes).map(([name, stats]) => ({
+      name, vol: sn(stats?.year_to_date?.current_year)
+    })).sort((a, b) => b.vol - a.vol);
+    const mostCommon = allByVolume[0];
+
+    // Shooting victims this week
+    const shootVicWeek = sn(addl['Shooting Vic.']?.week_to_date?.current_year);
+
+    // Highest crime rate precinct
+    const pctKeys = Object.keys(rawData).filter(k => k.includes('Precinct'));
+    const pctRates = pctKeys.map(pct => {
+      const d = rawData[pct]; const p = GEO_POPULATIONS[pct] || 0;
+      let total = 0;
+      Object.values(d.seven_major_felonies || {}).forEach(s => { total += sn(s?.year_to_date?.current_year); });
+      return { pct, total, pop: p, rate: p > 0 ? (total / p) * 100000 : 0 };
+    }).filter(r => r.pop > 0 && !TOURIST_PRECINCTS.includes(r.pct)).sort((a, b) => b.rate - a.rate);
+    const topPrecinct = pctRates[0];
+
+    // NYC vs Chicago murder rate
+    const nycRTCI = RTCI_CITIES.find(c => c.isNYC);
+    const chiRTCI = RTCI_CITIES.find(c => c.city === 'Chicago');
+    const nycMurderRate = nycRTCI ? rtciRate(nycRTCI.murder, nycRTCI.pop) : 0;
+    const chiMurderRate = chiRTCI ? rtciRate(chiRTCI.murder, chiRTCI.pop) : 0;
+
+    // Primary driver
+    let ytdPrior = 0;
+    Object.values(felonies).forEach(s => { ytdPrior += sn(s?.year_to_date?.prior_year); });
+    const ytdDiff = ytdTotal - ytdPrior;
+    let driverName = '', driverShare = 0;
+    if (ytdDiff !== 0) {
+      let maxDiff = 0;
+      Object.entries(felonies).forEach(([name, stats]) => {
+        const d = sn(stats?.year_to_date?.current_year) - sn(stats?.year_to_date?.prior_year);
+        if (Math.abs(d) > Math.abs(maxDiff) && Math.sign(d) === Math.sign(ytdDiff)) { driverName = name; maxDiff = d; }
+      });
+      driverShare = Math.abs((maxDiff / ytdDiff) * 100);
+    }
+
+    // Traffic fatalities YTD
+    const trafficYTD = sn(addl['Traffic Fatalities']?.year_to_date?.current_year);
+
+    // Precinct spike (from hotspots)
+    const spikeData = hotspots?.topPctSpike;
+
+    const tests = [
+      {
+        q: 'How many murders have there been in 2026 YTD?',
+        expected: String(murderYTD),
+        validate: (a) => a.includes(String(murderYTD)),
+        label: `Murder YTD = ${murderYTD}`
+      },
+      {
+        q: 'What is the total number of major index offenses YTD in 2026?',
+        expected: ytdTotal.toLocaleString(),
+        validate: (a) => a.includes(ytdTotal.toLocaleString()) || a.includes(String(ytdTotal)),
+        label: `Index total = ${ytdTotal.toLocaleString()}`
+      },
+      {
+        q: 'Which crime category has the largest percentage increase YTD across all tracked offenses?',
+        expected: topIncrease ? `${topIncrease.name} (+${topIncrease.pct.toFixed(1)}%)` : 'n/a',
+        validate: (a) => topIncrease ? a.toLowerCase().includes(topIncrease.name.toLowerCase()) : true,
+        label: `Top increase = ${topIncrease?.name}`
+      },
+      {
+        q: 'What is the single most common crime in NYC in 2026 YTD, considering all tracked offenses?',
+        expected: mostCommon ? `${mostCommon.name} (${mostCommon.vol.toLocaleString()})` : 'n/a',
+        validate: (a) => mostCommon ? a.toLowerCase().includes(mostCommon.name.toLowerCase()) : true,
+        label: `Most common = ${mostCommon?.name}`
+      },
+      {
+        q: 'How many shooting victims were there this week?',
+        expected: String(shootVicWeek),
+        validate: (a) => a.includes(String(shootVicWeek)),
+        label: `Shooting victims (week) = ${shootVicWeek}`
+      },
+      {
+        q: 'Which precinct has the highest crime rate per 100k residents?',
+        expected: topPrecinct ? topPrecinct.pct : 'n/a',
+        validate: (a) => topPrecinct ? a.includes('40th') || a.toLowerCase().includes('mott haven') || a.includes(topPrecinct.pct.replace('Precinct', '').trim()) : true,
+        label: `Top precinct = ${topPrecinct?.pct}`
+      },
+      {
+        q: "How does NYC's murder rate compare to Chicago's?",
+        expected: `NYC ${nycMurderRate}, Chicago ${chiMurderRate}`,
+        validate: (a) => a.includes(String(nycMurderRate)) && a.includes(String(chiMurderRate)),
+        label: `NYC ${nycMurderRate} vs Chicago ${chiMurderRate}`
+      },
+      {
+        q: 'What is the primary driver of the citywide index crime drop?',
+        expected: `${driverName} (${driverShare.toFixed(0)}%)`,
+        validate: (a) => driverName ? a.toLowerCase().includes(driverName.toLowerCase()) : true,
+        label: `Driver = ${driverName} (${driverShare.toFixed(0)}%)`
+      },
+      {
+        q: spikeData ? `What happened with ${spikeData.crime} in the ${spikeData.precinct.replace('Precinct', 'Precinct').trim()}?` : 'Are there any significant precinct-level crime spikes?',
+        expected: spikeData ? `${spikeData.crime} +${spikeData.pct.toFixed(1)}%` : 'n/a',
+        validate: (a) => spikeData ? (a.includes(spikeData.pct.toFixed(1)) || a.toLowerCase().includes(spikeData.crime.toLowerCase())) : true,
+        label: spikeData ? `${spikeData.precinct} ${spikeData.crime} +${spikeData.pct.toFixed(1)}%` : 'Spike data'
+      },
+      {
+        q: 'How many traffic fatalities have there been YTD in 2026?',
+        expected: String(trafficYTD),
+        validate: (a) => a.includes(String(trafficYTD)),
+        label: `Traffic fatalities = ${trafficYTD}`
+      }
+    ];
+
+    // Build context the same way QueryBox does — reuse the same data path
+    // We call /api/chat with the same system prompt and full context
+    const buildAuditContext = () => {
+      const geoData = cw;
+      const periodStr = `${rawData.period?.week_start || ''} – ${rawData.period?.week_end || ''}`;
+      const pop = CITYWIDE_POPULATION;
+      const extractBoth = (stats) => {
+        const ytdCur = sn(stats?.year_to_date?.current_year);
+        const ytdPri = sn(stats?.year_to_date?.prior_year);
+        const ytdPct = stats?.year_to_date?.pct_change;
+        const wtdCur = sn(stats?.week_to_date?.current_year);
+        const wtdPri = sn(stats?.week_to_date?.prior_year);
+        const wtdPct = stats?.week_to_date?.pct_change;
+        const d28Cur = sn(stats?.twenty_eight_day?.current_year);
+        const d28Pri = sn(stats?.twenty_eight_day?.prior_year);
+        const d28Pct = stats?.twenty_eight_day?.pct_change;
+        const hist2 = stats?.historical?.['2_yr_pct'];
+        const hist14 = stats?.historical?.['14_yr_pct'];
+        const hist31 = stats?.historical?.['31_yr_pct'];
+        return { ytdCur, ytdPri, ytdPct, wtdCur, wtdPri, wtdPct, d28Cur, d28Pri, d28Pct, hist2, hist14, hist31 };
+      };
+      const offenseLines = Object.entries(allCrimes).map(([name, stats]) => {
+        const b = extractBoth(stats);
+        const rateSuffix = pop ? ` (${((b.ytdCur / pop) * 100000).toFixed(1)}/100k)` : '';
+        const histParts = [];
+        if (b.hist2 != null) histParts.push(`2yr: ${formatPct(b.hist2)}`);
+        if (b.hist14 != null) histParts.push(`14yr: ${formatPct(b.hist14)}`);
+        if (b.hist31 != null) histParts.push(`31yr: ${formatPct(b.hist31)}`);
+        const histSuffix = histParts.length > 0 ? ` | Long-term: ${histParts.join(', ')}` : '';
+        return `  ${name}: YTD ${b.ytdCur.toLocaleString()} vs ${b.ytdPri.toLocaleString()} (${formatPct(b.ytdPct)})${rateSuffix} | Week ${b.wtdCur.toLocaleString()} vs ${b.wtdPri.toLocaleString()} (${formatPct(b.wtdPct)}) | 28-day ${b.d28Cur.toLocaleString()} vs ${b.d28Pri.toLocaleString()} (${formatPct(b.d28Pct)})${histSuffix}`;
+      }).join('\n');
+
+      let ytdMCur = 0, ytdMPri = 0, wtdMCur = 0, wtdMPri = 0;
+      let ytdVCur = 0, ytdVPri = 0, ytdPCur = 0, ytdPPri = 0, wtdVCur = 0, wtdPCur = 0;
+      let ytdMurderVal = 0, wtdMurderVal = 0, ytdMurderPriVal = 0;
+      let ytdShootingVicVal = 0, wtdShootingVicVal = 0;
+      const perOffenseYtdShares = [];
+      const perOffenseWtdChanges = [];
+      Object.entries(felonies).forEach(([name, stats]) => {
+        const b = extractBoth(stats);
+        ytdMCur += b.ytdCur; ytdMPri += b.ytdPri;
+        wtdMCur += b.wtdCur; wtdMPri += b.wtdPri;
+        if (name === 'Murder') { ytdMurderVal = b.ytdCur; wtdMurderVal = b.wtdCur; ytdMurderPriVal = b.ytdPri; }
+        if (VIOLENT_CRIMES.includes(name)) { ytdVCur += b.ytdCur; ytdVPri += b.ytdPri; wtdVCur += b.wtdCur; }
+        if (PROPERTY_CRIMES.includes(name)) { ytdPCur += b.ytdCur; ytdPPri += b.ytdPri; wtdPCur += b.wtdCur; }
+        perOffenseYtdShares.push({ name, cur: b.ytdCur, pri: b.ytdPri });
+        perOffenseWtdChanges.push({ name, cur: b.wtdCur, pri: b.wtdPri });
+      });
+      Object.entries(addl).forEach(([, stats]) => {
+        const b = extractBoth(stats);
+        if (b.ytdCur) ytdShootingVicVal = ytdShootingVicVal || 0; // just to reference
+      });
+      ytdShootingVicVal = sn(addl['Shooting Vic.']?.year_to_date?.current_year);
+      wtdShootingVicVal = sn(addl['Shooting Vic.']?.week_to_date?.current_year);
+
+      const ytdTotalPctVal = formatPct(calcPct(ytdMCur, ytdMPri));
+      const wtdTotalPctVal = formatPct(calcPct(wtdMCur, wtdMPri));
+      const ytdViolentPctVal = ((ytdVCur / (ytdMCur || 1)) * 100).toFixed(1);
+      const ytdPropertyPctVal = ((ytdPCur / (ytdMCur || 1)) * 100).toFixed(1);
+      const ytdViolentChangePctVal = formatPct(calcPct(ytdVCur, ytdVPri));
+      const ytdPropertyChangePctVal = formatPct(calcPct(ytdPCur, ytdPPri));
+      const perOffenseYtdLines = perOffenseYtdShares.map(o => {
+        const share = ((o.cur / (ytdMCur || 1)) * 100).toFixed(1);
+        const chg = formatPct(calcPct(o.cur, o.pri));
+        return `  ${o.name}: ${share}% of total (${o.cur.toLocaleString()} incidents, ${chg} vs ${priorYear})`;
+      }).join('\n');
+      const perOffenseWtdLines = perOffenseWtdChanges.map(o => {
+        const chg = formatPct(calcPct(o.cur, o.pri));
+        return `  ${o.name}: ${o.cur.toLocaleString()} vs ${o.pri.toLocaleString()} (${chg})`;
+      }).join('\n');
+
+      const audYtdDiff = ytdMCur - ytdMPri;
+      let audDriverLine = '';
+      if (audYtdDiff !== 0) {
+        let dn = '', dd = 0;
+        Object.entries(felonies).forEach(([name, stats]) => {
+          const b = extractBoth(stats);
+          const d = b.ytdCur - b.ytdPri;
+          if (Math.abs(d) > Math.abs(dd) && Math.sign(d) === Math.sign(audYtdDiff)) { dn = name; dd = d; }
+        });
+        if (dn) audDriverLine = `PRIMARY DRIVER OF INDEX CRIME CHANGE (YTD, among 7 major index felonies): ${dn} accounts for ${Math.abs((dd / audYtdDiff) * 100).toFixed(0)}% of the overall index shift (${dd > 0 ? '+' : ''}${dd.toLocaleString()} incidents, from ${sn(felonies[dn]?.year_to_date?.prior_year).toLocaleString()} to ${sn(felonies[dn]?.year_to_date?.current_year).toLocaleString()})`;
+      }
+      const audLethalityLine = ytdMurderVal > 0 ? `LETHALITY GAP: For every 1 homicide, there were ${(ytdShootingVicVal / ytdMurderVal).toFixed(1)} shooting victims YTD (${ytdShootingVicVal} victims / ${ytdMurderVal} murders)` : '';
+
+      const allCrimeEntries = Object.entries(allCrimes);
+      const audAllYtdChanges = allCrimeEntries.map(([name, stats]) => {
+        const b = extractBoth(stats);
+        const pctChg = b.ytdPri > 0 ? ((b.ytdCur - b.ytdPri) / b.ytdPri) * 100 : null;
+        return { name, ytdCur: b.ytdCur, ytdPri: b.ytdPri, diff: b.ytdCur - b.ytdPri, pctChg };
+      }).filter(o => o.pctChg !== null && o.ytdPri >= 10);
+      const sPctUp = [...audAllYtdChanges].sort((a, b) => (b.pctChg || 0) - (a.pctChg || 0));
+      const sPctDown = [...audAllYtdChanges].sort((a, b) => (a.pctChg || 0) - (b.pctChg || 0));
+      const sRawDown = [...audAllYtdChanges].sort((a, b) => a.diff - b.diff);
+      const sRawUp = [...audAllYtdChanges].sort((a, b) => b.diff - a.diff);
+      const supLines = [
+        `LARGEST YTD % INCREASES (across ALL tracked offenses):`,
+        ...sPctUp.filter(o => o.pctChg > 0).slice(0, 5).map(o => `  ${o.name}: +${o.pctChg.toFixed(1)}% (${o.ytdCur.toLocaleString()} vs ${o.ytdPri.toLocaleString()})`),
+        `LARGEST YTD % DECREASES (across ALL tracked offenses):`,
+        ...sPctDown.filter(o => o.pctChg < 0).slice(0, 5).map(o => `  ${o.name}: ${o.pctChg.toFixed(1)}% (${o.ytdCur.toLocaleString()} vs ${o.ytdPri.toLocaleString()})`),
+        `LARGEST YTD RAW DECREASES (across ALL tracked offenses):`,
+        ...sRawDown.filter(o => o.diff < 0).slice(0, 5).map(o => `  ${o.name}: ${o.diff.toLocaleString()} fewer (${o.ytdCur.toLocaleString()} vs ${o.ytdPri.toLocaleString()})`),
+        `LARGEST YTD RAW INCREASES (across ALL tracked offenses):`,
+        ...sRawUp.filter(o => o.diff > 0).slice(0, 5).map(o => `  ${o.name}: +${o.diff.toLocaleString()} more (${o.ytdCur.toLocaleString()} vs ${o.ytdPri.toLocaleString()})`),
+        `HIGHEST-VOLUME OFFENSES YTD (across ALL tracked offenses):`,
+        ...audAllYtdChanges.sort((a, b) => b.ytdCur - a.ytdCur).slice(0, 10).map(o => `  ${o.name}: ${o.ytdCur.toLocaleString()} incidents`),
+      ].join('\n');
+
+      let audPrecinctSummary = '';
+      const audPctKeys = Object.keys(rawData).filter(k => k.includes('Precinct'));
+      if (audPctKeys.length > 0) {
+        const audPctRates = audPctKeys.map(pct => {
+          const d = rawData[pct]; const p = GEO_POPULATIONS[pct] || 0;
+          let total = 0;
+          Object.values(d.seven_major_felonies || {}).forEach(stats => { total += sn(stats?.year_to_date?.current_year); });
+          return { pct, hood: PRECINCT_NEIGHBORHOODS[pct] || '', total, pop: p, rate: p > 0 ? (total / p) * 100000 : 0 };
+        }).filter(r => r.pop > 0 && !TOURIST_PRECINCTS.includes(r.pct)).sort((a, b) => b.rate - a.rate);
+        const avgRate = audPctRates.reduce((s, r) => s + r.rate, 0) / (audPctRates.length || 1);
+        const top5 = audPctRates.slice(0, 5).map(r => `  ${r.pct} (${r.hood}): ${r.rate.toFixed(0)}/100k (${r.total} incidents, pop ${formatPop(r.pop)})`).join('\n');
+        const bot5 = audPctRates.slice(-5).reverse().map(r => `  ${r.pct} (${r.hood}): ${r.rate.toFixed(0)}/100k (${r.total} incidents, pop ${formatPop(r.pop)})`).join('\n');
+        const allPctLines = audPctRates.map((r, i) => `  #${i + 1} ${r.pct} (${r.hood}): ${r.rate.toFixed(0)}/100k`).join('\n');
+
+        let audAllPctCrimes = [];
+        audPctKeys.forEach(pct => {
+          Object.entries(rawData[pct].seven_major_felonies || {}).forEach(([crime, stats]) => {
+            const c = sn(stats?.year_to_date?.current_year);
+            const p = sn(stats?.year_to_date?.prior_year);
+            if (p >= 10) audAllPctCrimes.push({ precinct: pct, crime, cur: c, pri: p, pctChg: ((c - p) / p) * 100 });
+          });
+        });
+        audAllPctCrimes.sort((a, b) => b.pctChg - a.pctChg);
+        const audTopSpike = audAllPctCrimes[0];
+        const audTopDrop = audAllPctCrimes[audAllPctCrimes.length - 1];
+        let localShiftsLine = '\nSIGNIFICANT LOCAL SHIFTS (biggest precinct-level YTD changes):';
+        if (audTopSpike) localShiftsLine += `\n  Biggest spike: ${audTopSpike.crime} in ${audTopSpike.precinct} (${PRECINCT_NEIGHBORHOODS[audTopSpike.precinct] || ''}): ${audTopSpike.cur} vs ${audTopSpike.pri} (+${audTopSpike.pctChg.toFixed(1)}%)`;
+        if (audTopDrop) localShiftsLine += `\n  Biggest drop: ${audTopDrop.crime} in ${audTopDrop.precinct} (${PRECINCT_NEIGHBORHOODS[audTopDrop.precinct] || ''}): ${audTopDrop.cur} vs ${audTopDrop.pri} (${audTopDrop.pctChg.toFixed(1)}%)`;
+        audPrecinctSummary = `\nPRECINCT CRIME RATES (YTD major index per 100k, ranked highest to lowest, citywide avg: ${avgRate.toFixed(0)}/100k):\n${allPctLines}\n\nTOP 5 HIGHEST-RATE (detail):\n${top5}\n\nTOP 5 LOWEST-RATE (detail):\n${bot5}${localShiftsLine}`;
+      }
+
+      const cityCompLine = `\nCITY COMPARISON (12-month rolling totals per 100k, through ${RTCI_PERIOD}, source: Real-Time Crime Index by AH Datalytics):\n` +
+        RTCI_CITIES.map(c => `  ${c.city}: Murder ${rtciRate(c.murder, c.pop)}/100k, Violent ${rtciRate(c.violent, c.pop)}/100k, Property ${rtciRate(c.property, c.pop)}/100k`).join('\n');
+
+      return `=== LIVE NYPD COMPSTAT DATA (Week of ${periodStr}) ===
+Geography: Citywide (all of NYC)
+Current year: ${currentYear} | Prior year: ${priorYear}
+NOTE: This dashboard tracks 18+ offense categories. The "7 major index felonies" are Murder, Rape, Robbery, Fel. Assault, Burglary, Gr. Larceny, and G.L.A. Additional tracked offenses include Petit Larceny, Retail Theft, Shooting Incidents, Shooting Victims, Misd. Assault, Misd. Sex Crimes, Hate Crimes, Transit, UCR Rape, Traffic Fatalities, and more. When answering "which crime" or "most/least" questions, consider ALL tracked offenses below, not just the 7 major index felonies.
+
+YEAR-TO-DATE SUMMARY:
+  Total major index felonies: ${ytdMCur.toLocaleString()} (${currentYear}) vs ${ytdMPri.toLocaleString()} (${priorYear}) = ${ytdTotalPctVal} change
+  Violent crime total: ${ytdVCur.toLocaleString()} (${ytdViolentPctVal}% of index total, ${ytdViolentChangePctVal} vs ${priorYear})
+  Property crime total: ${ytdPCur.toLocaleString()} (${ytdPropertyPctVal}% of index total, ${ytdPropertyChangePctVal} vs ${priorYear})
+  Murders: ${ytdMurderVal} (${currentYear}) vs ${ytdMurderPriVal} (${priorYear}) = ${formatPct(calcPct(ytdMurderVal, ytdMurderPriVal))} change
+  Shooting Victims: ${ytdShootingVicVal}
+
+WEEKLY SUMMARY (week of ${periodStr}):
+  Total major index felonies: ${wtdMCur.toLocaleString()} (${currentYear}) vs ${wtdMPri.toLocaleString()} (${priorYear}) = ${wtdTotalPctVal} change
+  Violent crime: ${wtdVCur.toLocaleString()} | Property crime: ${wtdPCur.toLocaleString()}
+  Murders: ${wtdMurderVal} | Shooting Victims: ${wtdShootingVicVal}
+
+YTD SHARE OF TOTAL BY OFFENSE (among 7 major index felonies — pre-computed, use directly):
+${perOffenseYtdLines}
+
+WEEKLY CHANGE BY OFFENSE (among 7 major index felonies — pre-computed, use directly):
+${perOffenseWtdLines}
+
+ALL TRACKED OFFENSES (both YTD and weekly, including non-index — THIS IS THE COMPLETE LIST):
+${offenseLines}
+
+${supLines}
+
+${audDriverLine}
+${audLethalityLine}${audPrecinctSummary}${cityCompLine}
+
+=== HISTORICAL DATASETS ===
+WARNING: Historical data contains FULL-YEAR ANNUAL TOTALS ONLY (not YTD).
+CITYWIDE ANNUAL TOTALS 1993-2025 (key: y=year, BU=Burglary, FA=Fel.Assault, GA=G.L.A., GL=Gr.Larceny, MU=Murder, RA=Rape, RO=Robbery):
+${JSON.stringify(CW)}
+`;
+    };
+
+    const systemPrompt = `You are a concise, plain-language crime data analyst for CompStat, in Context by Vital City. You answer questions ONLY using the DATA section provided with each message. You have no other source of information.
+
+RULE 1 — NEVER MAKE ANYTHING UP:
+Every number you cite must appear verbatim in the DATA section. If it's not there, say "I don't have that figure in the current dataset." Do not estimate, approximate, extrapolate, or invent. Do not use your training data for ANY NYC crime statistic. A wrong crime number is dangerous misinformation — "I don't know" is always the right answer when the data isn't there.
+
+RULE 2 — DO NOT DO MATH:
+All totals, percentages, shares, rates, and rankings are pre-computed in the DATA. Use them exactly as given. Do not add, subtract, multiply, or divide numbers yourself. If a derived figure isn't pre-computed, say "That calculation isn't in the current dataset" — do not attempt it.
+
+RULE 3 — SEARCH ALL OFFENSES:
+This dashboard tracks 18+ offense categories, NOT just the 7 major index felonies. For ANY question about "which crime," "most," "least," "biggest," "highest," "largest increase," or any superlative — you MUST check the "ALL TRACKED OFFENSES" section AND the "LARGEST YTD % INCREASES/DECREASES" and "HIGHEST-VOLUME OFFENSES" sections.
+
+RULE 4 — HISTORICAL & LONG-TERM DATA:
+Each offense line includes "Long-term" % changes. The HISTORICAL DATASETS section contains full-year annual totals (not YTD) for 1993-2025.
+
+RULE 5 — PRECINCT DATA:
+Precinct-level overall crime rates (per 100k) are provided. The SIGNIFICANT LOCAL SHIFTS section shows the biggest precinct-level offense spikes and drops.
+
+RULE 6 — WHEN IN DOUBT, SAY YOU DON'T KNOW:
+If you are not 100% certain the answer is in the DATA, say so. Never guess.
+
+FORMAT: Answer in 2-4 sentences. Cite exact numbers from the data. No bullet points or headers.`;
+
+    const dataContext = buildAuditContext();
+    const results = [];
+
+    for (let i = 0; i < tests.length; i++) {
+      const test = tests[i];
+      setAuditResults(prev => ({ ...prev, progress: i }));
+      try {
+        const res = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            max_tokens: 500,
+            temperature: 0,
+            system: systemPrompt,
+            messages: [{ role: 'user', content: `DATA:\n${dataContext}\n\nQUESTION: ${test.q}` }]
+          })
+        });
+        if (!res.ok) throw new Error(`API ${res.status}`);
+        const data = await res.json();
+        const answer = data?.content?.[0]?.text || '';
+        const pass = test.validate(answer);
+        results.push({ ...test, answer, pass });
+      } catch (e) {
+        results.push({ ...test, answer: `ERROR: ${e.message}`, pass: false });
+      }
+    }
+
+    const passed = results.filter(r => r.pass).length;
+    setAuditResults({ progress: tests.length, total: tests.length, results, passed, score: `${passed}/${tests.length}` });
+    setAuditRunning(false);
+  };
+
+  // ==========================================
   // LIVE COMPSTAT DASHBOARD RENDER
   // ==========================================
   return (
     <div className="min-h-screen pb-12 font-sans bg-white text-black text-[15px]">
+      {/* Audit Results Overlay */}
+      {auditResults && auditResults.results && auditResults.results.length > 0 && (
+        <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg shadow-2xl max-w-3xl w-full max-h-[85vh] overflow-auto">
+            <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center">
+              <div>
+                <h2 className="text-[13px] font-black uppercase tracking-widest">AI Chatbot Audit</h2>
+                <p className="text-[12px] text-gray-500 mt-1">
+                  Score: <span className={`font-black ${auditResults.passed === auditResults.total ? 'text-green-600' : auditResults.passed >= auditResults.total * 0.8 ? 'text-orange-600' : 'text-red-600'}`}>{auditResults.score}</span>
+                  {' '}({((auditResults.passed / auditResults.total) * 100).toFixed(0)}% accuracy)
+                </p>
+              </div>
+              <button onClick={() => setAuditResults(null)} className="text-gray-400 hover:text-black text-xl font-bold px-2">&times;</button>
+            </div>
+            <div className="px-6 py-4 space-y-4">
+              {auditResults.results.map((r, i) => (
+                <div key={i} className={`border rounded p-4 ${r.pass ? 'border-green-200 bg-green-50/50' : 'border-red-200 bg-red-50/50'}`}>
+                  <div className="flex items-start gap-3">
+                    <span className={`text-[16px] mt-0.5 ${r.pass ? 'text-green-600' : 'text-red-600'}`}>{r.pass ? '\u2705' : '\u274C'}</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[11px] font-black uppercase tracking-widest text-gray-500 mb-1">Q{i + 1}: {r.q}</p>
+                      <p className="text-[11px] text-gray-400 mb-2">Expected: <span className="font-mono">{r.label}</span></p>
+                      <p className="font-serif text-[13px] text-gray-700 leading-relaxed break-words">{r.answer}</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
       <div className="max-w-[1100px] mx-auto px-5 sm:px-8">
 
         <header className="pt-6 pb-3 mb-6 border-b border-gray-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 relative">
@@ -1648,6 +2053,11 @@ ABSOLUTE RULES:
             </div>
             </div>
             <p className="text-[10px] text-gray-400 mt-1 leading-snug">NYPD CompStat data scraped, with key insights surfaced and synthesized. An independent project. Some of the work is done by AI, so everything here should be double-checked.</p>
+            {showAuditBtn && (
+              <button onClick={runAudit} disabled={auditRunning} className="mt-1 text-[9px] font-black uppercase tracking-widest text-orange-600 border border-orange-300 rounded px-2 py-0.5 hover:bg-orange-50 disabled:opacity-50">
+                {auditRunning ? `Auditing… ${auditResults?.progress || 0}/${auditResults?.total || 10}` : 'Run AI Audit'}
+              </button>
+            )}
           </div>
           <div className="flex flex-wrap items-center gap-3 w-full md:w-auto relative z-20">
             <div className="flex flex-1 md:w-72 relative min-w-[200px]">
