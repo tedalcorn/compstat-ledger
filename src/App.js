@@ -1627,8 +1627,9 @@ ABSOLUTE RULES:
       <div className="max-w-[1100px] mx-auto px-5 sm:px-8">
 
         <header className="pt-6 pb-3 mb-6 border-b border-gray-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 relative">
-          <div className="flex items-center gap-3">
-            <span className="text-[11px] font-black uppercase tracking-widest text-black">CompStat, in Context</span>
+          <div>
+            <div className="flex items-center gap-3">
+              <span className="text-[11px] font-black uppercase tracking-widest text-black">CompStat, in Context</span>
             <span className="text-gray-300">•</span>
             <span className="text-[12px] font-medium text-gray-500 tabular-nums">{parsedData.period?.week_start || 'N/A'} – {parsedData.period?.week_end || 'N/A'}</span>
             <button onClick={loadReport} className="ml-2 text-gray-400 hover:text-black transition-colors"><RefreshCw size={14} className={loading ? "animate-spin" : ""} /></button>
@@ -1645,6 +1646,8 @@ ABSOLUTE RULES:
                 </ul>
               </div>}
             </div>
+            </div>
+            <p className="text-[10px] text-gray-400 mt-1 leading-snug">NYPD CompStat data scraped, with key insights surfaced and synthesized. An independent project. Some of the work is done by AI, so everything here should be double-checked.</p>
           </div>
           <div className="flex flex-wrap items-center gap-3 w-full md:w-auto relative z-20">
             <div className="flex flex-1 md:w-72 relative min-w-[200px]">
