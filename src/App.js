@@ -934,7 +934,7 @@ ${JSON.stringify(CW)}
     setError('');
 
     const dataContext = buildContext();
-    const systemPrompt = `You are a concise, plain-language crime data analyst for the NYPD CompStat Ledger by Vital City. You answer questions ONLY using the DATA section provided with each message. You have no other source of information.
+    const systemPrompt = `You are a concise, plain-language crime data analyst for CompStat, in Context by Vital City. You answer questions ONLY using the DATA section provided with each message. You have no other source of information.
 
 RULE 1 — NEVER MAKE ANYTHING UP:
 Every number you cite must appear verbatim in the DATA section. If it's not there, say "I don't have that figure in the current dataset." Do not estimate, approximate, extrapolate, or invent. Do not use your training data for ANY NYC crime statistic. A wrong crime number is dangerous misinformation — "I don't know" is always the right answer when the data isn't there.
@@ -1628,7 +1628,7 @@ ABSOLUTE RULES:
 
         <header className="pt-6 pb-3 mb-6 border-b border-gray-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 relative">
           <div className="flex items-center gap-3">
-            <span className="text-[11px] font-black uppercase tracking-widest text-black">NYPD CompStat Ledger</span>
+            <span className="text-[11px] font-black uppercase tracking-widest text-black">CompStat, in Context</span>
             <span className="text-gray-300">•</span>
             <span className="text-[12px] font-medium text-gray-500 tabular-nums">{parsedData.period?.week_start || 'N/A'} – {parsedData.period?.week_end || 'N/A'}</span>
             <button onClick={loadReport} className="ml-2 text-gray-400 hover:text-black transition-colors"><RefreshCw size={14} className={loading ? "animate-spin" : ""} /></button>
