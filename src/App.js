@@ -501,20 +501,26 @@ const CityComparisonWidget = ({ rtciData }) => {
           </div>
         </div>
       </div>
-      <div className="space-y-2.5">
+      <div className="space-y-3">
         {ranked.map(c => {
-          const barW = maxRate > 0 ? (c.rate / maxRate) * 100 : 0;
+          const dotPos = maxRate > 0 ? (c.rate / maxRate) * 100 : 0;
           const isNYC = c.isNYC;
           return (
             <div key={c.city} className="flex items-center gap-3">
-              <span className={`w-28 text-right text-[12px] ${isNYC ? 'font-black text-gray-900' : 'font-medium text-gray-500'}`}>
+              <span className={`w-28 text-right text-[12px] shrink-0 ${isNYC ? 'font-black text-gray-900' : 'font-medium text-gray-500'}`}>
                 {c.city === 'New York City' ? 'New York' : c.city}
               </span>
-              <div className="flex-1 h-5 bg-gray-200 rounded-sm overflow-hidden relative">
-                <div className={`h-full rounded-sm ${isNYC ? 'bg-gray-900' : 'bg-gray-400'}`}
-                  style={{ width: `${barW}%` }} />
+              <div className="flex-1 h-6 relative">
+                {/* Baseline */}
+                <div className="absolute top-1/2 left-0 right-0 h-px bg-gray-200" />
+                {/* Stem */}
+                <div className={`absolute top-1/2 left-0 h-0.5 ${isNYC ? 'bg-gray-900' : 'bg-gray-300'}`}
+                  style={{ width: `${dotPos}%`, transform: 'translateY(-50%)' }} />
+                {/* Dot */}
+                <div className={`absolute top-1/2 rounded-full ${isNYC ? 'w-3.5 h-3.5 bg-gray-900' : 'w-2.5 h-2.5 bg-gray-400'}`}
+                  style={{ left: `${dotPos}%`, transform: 'translate(-50%, -50%)' }} />
               </div>
-              <span className={`w-16 text-[12px] tabular-nums ${isNYC ? 'font-black text-gray-900' : 'font-medium text-gray-500'}`}>
+              <span className={`w-14 text-[12px] tabular-nums shrink-0 ${isNYC ? 'font-black text-gray-900' : 'font-medium text-gray-500'}`}>
                 {c.rate.toLocaleString()}
               </span>
             </div>
