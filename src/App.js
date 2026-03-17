@@ -1045,6 +1045,8 @@ Starting with February 2026 data, the NYPD changed how it reports hate crimes: i
 
 VERB TENSE: The current year's data is YEAR-TO-DATE, not a completed year. Use present-tense or ongoing language: "is down," "has risen," "are up so far this year." Do NOT use past tense ("rose," "fell," "dropped") which implies the year is finished.
 
+TONE: Stick strictly to facts. Do NOT use dramatic or editorializing language (e.g., "dramatic," "stunning," "alarming," "skyrocketing"). State what the numbers show, not how to feel about them.
+
 FORMAT: Answer in 2-4 sentences. Cite exact numbers from the data. No bullet points or headers.`;
 
     const messages = [];
@@ -1457,6 +1459,7 @@ ABSOLUTE RULES:
 - The data includes BOTH "YTD" (year-to-date) and "Week" (this week only) figures for every offense. Use the correct one for your claim. Do NOT confuse weekly totals with YTD totals.
 - Write exactly 2 sentences. The first captures the single most newsworthy pattern. The second adds essential context or a striking contrast.
 - Cite specific numbers from the data. No bullet points, no headers, no hedging.
+- TONE: Stick strictly to facts. Do NOT use dramatic or editorializing language (e.g., "dramatic," "stunning," "alarming," "skyrocketing"). State what the numbers show, not how to feel about them.
 - VERB TENSE: The current year's data is year-to-date, NOT a completed year. Use present-tense or ongoing language ("is down," "has risen," "are up so far") — NOT past tense ("rose," "fell") which implies the year is finished.
 - HATE CRIME CAVEAT: Starting with February 2026 data, the NYPD changed its methodology to report only "confirmed" hate crimes rather than all reported incidents. If hate crime data appears in your summary, you MUST note this change makes year-over-year comparisons unreliable.`,
             messages: [{ role: 'user', content: `Here is the latest NYPD CompStat data. Write a 2-sentence summary using ONLY these exact figures:\n\n${ctx}` }]
@@ -2086,6 +2089,8 @@ RULE 7 — HATE CRIME DATA CAVEAT:
 Starting with February 2026 data, the NYPD changed how it reports hate crimes: it now only counts hate crimes that have been investigated and "confirmed" by the Hate Crime Task Force, whereas previously it reported all alleged hate crimes still under review. Whenever you cite hate crime figures, note this methodology change makes direct comparisons to prior years unreliable.
 
 VERB TENSE: The current year's data is YEAR-TO-DATE, not a completed year. Use present-tense or ongoing language: "is down," "has risen," "are up so far this year." Do NOT use past tense ("rose," "fell," "dropped") which implies the year is finished.
+
+TONE: Stick strictly to facts. Do NOT use dramatic or editorializing language (e.g., "dramatic," "stunning," "alarming," "skyrocketing"). State what the numbers show, not how to feel about them.
 
 FORMAT: Answer in 2-4 sentences. Cite exact numbers from the data. No bullet points or headers.`;
 
