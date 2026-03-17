@@ -159,6 +159,17 @@ const VC = {
 const VIOLENT_CRIMES = ["Murder", "Rape", "Robbery", "Fel. Assault", "Misd. Assault", "Shooting Inc.", "Shooting Vic.", "Hate Crimes"];
 const PROPERTY_CRIMES = ["Burglary", "Gr. Larceny", "G.L.A.", "Petit Larceny", "Retail Theft"];
 const TOURIST_PRECINCTS = ["14th Precinct", "18th Precinct", "22nd Precinct"];
+// Expand NYPD abbreviations for display
+const OFFENSE_LABELS = {
+  'G.L.A.': 'Grand Larceny Auto',
+  'Gr. Larceny': 'Grand Larceny',
+  'Fel. Assault': 'Felony Assault',
+  'Misd. Assault': 'Misdemeanor Assault',
+  'Misd. Sex Crimes': 'Misd. Sex Crimes',
+  'Shooting Inc.': 'Shooting Incidents',
+  'Shooting Vic.': 'Shooting Victims',
+};
+const offenseLabel = (name) => OFFENSE_LABELS[name] || name;
 
 const FALLBACK_DATA = {
   "citywide": {
@@ -709,7 +720,7 @@ const DivergingBarChart = ({ data, vsLabel }) => {
           const textColor = isIncrease ? VC.orange : VC.green;
           return (
             <g key={row.name}>
-              <text x="0" y={y + 5} fontSize="13" fontWeight="bold" fill={VC.black} opacity={isSmallN ? 0.5 : 1}>{row.name}{row.name === 'Hate Crimes' ? '†' : ''}{isSmallN ? '*' : ''}</text>
+              <text x="0" y={y + 5} fontSize="13" fontWeight="bold" fill={VC.black} opacity={isSmallN ? 0.5 : 1}>{offenseLabel(row.name)}{row.name === 'Hate Crimes' ? '†' : ''}{isSmallN ? '*' : ''}</text>
               <rect x={isIncrease ? CENTER_X : CENTER_X - barWidth} y={y - 9} width={barWidth} height="20" fill={textColor} fillOpacity={isSmallN ? 0.3 : 1} rx="3" />
               <text x={isIncrease ? CENTER_X + barWidth + 8 : CENTER_X - barWidth - 8} y={y + 5} textAnchor={isIncrease ? "start" : "end"} fontSize="12" fontWeight="bold" fill={textColor} opacity={isSmallN ? 0.5 : 1}>{formatPct(row.pct)}</text>
             </g>
@@ -744,7 +755,7 @@ const UnifiedMagnitudeChart = ({ data, isTourist, citywideRates, activeGeo, peri
           const color = VIOLENT_CRIMES.includes(row.name) ? VC.magenta : PROPERTY_CRIMES.includes(row.name) ? VC.indigo : VC.periwinkle;
           return (
             <g key={row.name}>
-              <text x={START_X - 14} y={y + 5} textAnchor="end" fontSize="13" fontWeight="bold" fill={VC.black}>{row.name}{row.name === 'Hate Crimes' ? '†' : ''}</text>
+              <text x={START_X - 14} y={y + 5} textAnchor="end" fontSize="13" fontWeight="bold" fill={VC.black}>{offenseLabel(row.name)}{row.name === 'Hate Crimes' ? '†' : ''}</text>
               <rect x={START_X} y={y - 10} width={barWidth} height="22" fill={color} rx="3" />
               <text x={START_X + barWidth + 8} y={y + 5} fontSize="13" fontWeight="bold" fill={VC.black}>
                 {row.current.toLocaleString()}
@@ -1497,8 +1508,8 @@ ABSOLUTE RULES:
     if (activeGeo === 'citywide') {
       if (driver) {
         const driverShareText = driver.diff > 0
-          ? `The overall surge was largely driven by **${driver.name}** index offenses, which account for **${driver.share.toFixed(0)}%** of the total citywide upward shift.`
-          : `Nearly **${driver.share.toFixed(0)}%** of the total citywide drop in major index offenses can be attributed to **${driver.name}**, which saw **${Math.abs(driver.diff).toLocaleString()} fewer cases** than in ${priorYear}.`;
+          ? `The overall surge was largely driven by **${offenseLabel(driver.name)}** index offenses, which account for **${driver.share.toFixed(0)}%** of the total citywide upward shift.`
+          : `Nearly **${driver.share.toFixed(0)}%** of the total citywide drop in major index offenses can be attributed to **${offenseLabel(driver.name)}**, which saw **${Math.abs(driver.diff).toLocaleString()} fewer cases** than in ${priorYear}.`;
         const shareW = Math.min(100, driver.share);
         cards.push({ id: 'driver', icon: Target, title: 'Primary Driver', content: driverShareText,
           dataViz: (
@@ -1517,8 +1528,8 @@ ABSOLUTE RULES:
       if (hotspots?.topPctSpike || hotspots?.topPctDrop) {
         const flashContent = (
           <ul className="space-y-3 mt-1 text-[14px]">
-            {hotspots.topPctSpike && <li>{`In **${formatGeoName(hotspots.topPctSpike.precinct)}**, **${hotspots.topPctSpike.crime}** offenses have spiked by **${hotspots.topPctSpike.pct.toFixed(1)}%** vs. the same ${activeTab === 'ytd' ? 'period' : 'week'} last year.`}</li>}
-            {hotspots.topPctDrop && <li className="pt-2 border-t border-gray-100">{`In **${formatGeoName(hotspots.topPctDrop.precinct)}**, **${hotspots.topPctDrop.crime}** offenses have fallen by **${Math.abs(hotspots.topPctDrop.pct).toFixed(1)}%** vs. the same ${activeTab === 'ytd' ? 'period' : 'week'} last year.`}</li>}
+            {hotspots.topPctSpike && <li>{`In **${formatGeoName(hotspots.topPctSpike.precinct)}**, **${offenseLabel(hotspots.topPctSpike.crime)}** offenses have spiked by **${hotspots.topPctSpike.pct.toFixed(1)}%** vs. the same ${activeTab === 'ytd' ? 'period' : 'week'} last year.`}</li>}
+            {hotspots.topPctDrop && <li className="pt-2 border-t border-gray-100">{`In **${formatGeoName(hotspots.topPctDrop.precinct)}**, **${offenseLabel(hotspots.topPctDrop.crime)}** offenses have fallen by **${Math.abs(hotspots.topPctDrop.pct).toFixed(1)}%** vs. the same ${activeTab === 'ytd' ? 'period' : 'week'} last year.`}</li>}
           </ul>
         );
         cards.push({ id: 'flashpoints', icon: MapPin, title: 'Significant Local Shifts', content: flashContent });
@@ -1546,11 +1557,11 @@ ABSOLUTE RULES:
         });
       }
     } else {
-      if (driver && driver.share >= 25) cards.push({ id: 'local_driver', icon: Target, title: 'Local Driver', content: `The change in **${driver.name}** volume accounts for **${driver.share.toFixed(0)}%** of this area's trajectory.` });
-      if (localAnomaly && !isTouristPrecinct) cards.push({ id: 'anomaly', icon: AlertTriangle, title: 'Elevated Local Risk', content: `The rate for **${localAnomaly.name}** here is **${localAnomaly.localRate.toFixed(1)} per 100k residents**, which is **${localAnomaly.ratio.toFixed(1)}x** higher than the citywide average (${localAnomaly.cityRate.toFixed(1)}).` });
-      else if (topSurge && topSurge.pct > 0) cards.push({ id: 'surge', icon: TrendingUp, title: 'Local Trajectory', content: `**${topSurge.name}** index offenses have increased by **${topSurge.pct.toFixed(1)}%** vs. the same period in ${priorYear}.` });
-      if (localBrightSpot && !isTouristPrecinct) cards.push({ id: 'brightspot', icon: ShieldCheck, title: 'Local Bright Spot', content: `The rate of **${localBrightSpot.name}** offenses here sits **${((1 - localBrightSpot.ratio)*100).toFixed(0)}% below** the citywide average.` });
-      else if (topDrop && topDrop.pct < 0) cards.push({ id: 'drop', icon: TrendingDown, title: 'Local Trajectory', content: `**${topDrop.name}** index offenses have fallen by **${Math.abs(topDrop.pct).toFixed(1)}%** here vs. the same period in ${priorYear}.` });
+      if (driver && driver.share >= 25) cards.push({ id: 'local_driver', icon: Target, title: 'Local Driver', content: `The change in **${offenseLabel(driver.name)}** volume accounts for **${driver.share.toFixed(0)}%** of this area's trajectory.` });
+      if (localAnomaly && !isTouristPrecinct) cards.push({ id: 'anomaly', icon: AlertTriangle, title: 'Elevated Local Risk', content: `The rate for **${offenseLabel(localAnomaly.name)}** here is **${localAnomaly.localRate.toFixed(1)} per 100k residents**, which is **${localAnomaly.ratio.toFixed(1)}x** higher than the citywide average (${localAnomaly.cityRate.toFixed(1)}).` });
+      else if (topSurge && topSurge.pct > 0) cards.push({ id: 'surge', icon: TrendingUp, title: 'Local Trajectory', content: `**${offenseLabel(topSurge.name)}** index offenses have increased by **${topSurge.pct.toFixed(1)}%** vs. the same period in ${priorYear}.` });
+      if (localBrightSpot && !isTouristPrecinct) cards.push({ id: 'brightspot', icon: ShieldCheck, title: 'Local Bright Spot', content: `The rate of **${offenseLabel(localBrightSpot.name)}** offenses here sits **${((1 - localBrightSpot.ratio)*100).toFixed(0)}% below** the citywide average.` });
+      else if (topDrop && topDrop.pct < 0) cards.push({ id: 'drop', icon: TrendingDown, title: 'Local Trajectory', content: `**${offenseLabel(topDrop.name)}** index offenses have fallen by **${Math.abs(topDrop.pct).toFixed(1)}%** here vs. the same period in ${priorYear}.` });
     }
     return cards;
   };
@@ -2428,7 +2439,7 @@ FORMAT: Answer in 2-4 sentences. Cite exact numbers from the data. No bullet poi
                     const changeBarW = Math.abs(item.pct || 0) / maxAbsChange * 48;
                     return (
                       <tr key={item.name} className="hover:bg-gray-50 transition-colors group">
-                        <td className="py-2.5 font-bold text-sm text-black">{item.name}{item.name === 'Hate Crimes' && <span className="ml-1 text-gray-400">†</span>}{isVolatile && <span className="ml-1 text-gray-400">*</span>}</td>
+                        <td className="py-2.5 font-bold text-sm text-black">{offenseLabel(item.name)}{item.name === 'Hate Crimes' && <span className="ml-1 text-gray-400">†</span>}{isVolatile && <span className="ml-1 text-gray-400">*</span>}</td>
                         <td className="py-2.5 text-center hidden sm:table-cell">
                           <div className="flex items-center justify-center gap-3">
                             <MiniSparkline points={[item.prior, item.current]} minY={0} />
