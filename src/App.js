@@ -363,6 +363,19 @@ const crimeColor = (rate, min, max) => {
   return `rgb(${r},${g},${b})`;
 };
 
+// Diverging color scale for YoY change: green (decrease) → neutral → red (increase)
+const changeColor = (pctChange, maxAbs) => {
+  if (pctChange == null) return '#e5e5e5';
+  const capped = Math.min(maxAbs, Math.max(-maxAbs, pctChange));
+  const t = capped / (maxAbs || 1); // -1 to +1
+  if (t < 0) {
+    const s = Math.abs(t);
+    return `rgb(${Math.round(240 - s * 195)},${Math.round(240 - s * 80)},${Math.round(240 - s * 185)})`;
+  }
+  const s = t;
+  return `rgb(${Math.round(240 - s * 50)},${Math.round(240 - s * 170)},${Math.round(240 - s * 175)})`;
+};
+
 /* ------------------------------------------------------------------ */
 /* MINI SPARKLINE                                                      */
 /* ------------------------------------------------------------------ */
@@ -453,25 +466,31 @@ const CityComparisonWidget = () => {
 /* ------------------------------------------------------------------ */
 /* PRECINCT CHOROPLETH MAP                                             */
 /* ------------------------------------------------------------------ */
-const PrecinctMap = ({ precinctRates, onSelect, activeGeo, width = 520, height = 520 }) => {
+const PrecinctMap = ({ precinctRates, onSelect, activeGeo, mapMode = 'rate', width = 520, height = 520 }) => {
   const [hovered, setHovered] = useState(null);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   const svgRef = useRef(null);
 
-  const { pathFn, rateMap, minRate, maxRate } = useMemo(() => {
+  const { pathFn, rateMap, minRate, maxRate, maxAbsChange } = useMemo(() => {
     const projection = geoMercator().fitSize([width, height], precinctGeoJSON);
     const pathFn = geoPath().projection(projection);
     const rateMap = {};
-    let minR = Infinity, maxR = 0;
+    let minR = Infinity, maxR = 0, maxAbs = 0;
     precinctRates.forEach(p => {
       rateMap[p.precinctNum] = p;
-      if (p.rate != null && !p.isTourist) {
-        if (p.rate < minR) minR = p.rate;
-        if (p.rate > maxR) maxR = p.rate;
+      if (!p.isTourist) {
+        if (p.rate != null) {
+          if (p.rate < minR) minR = p.rate;
+          if (p.rate > maxR) maxR = p.rate;
+        }
+        if (p.pctChange != null) {
+          maxAbs = Math.max(maxAbs, Math.abs(p.pctChange));
+        }
       }
     });
     if (minR === Infinity) minR = 0;
-    return { pathFn, rateMap, minRate: minR, maxRate: maxR };
+    if (maxAbs > 100) maxAbs = 100;
+    return { pathFn, rateMap, minRate: minR, maxRate: maxR, maxAbsChange: maxAbs };
   }, [precinctRates, width, height]);
 
   const handleMouse = (e) => {
@@ -493,7 +512,9 @@ const PrecinctMap = ({ precinctRates, onSelect, activeGeo, width = 520, height =
         {precinctGeoJSON.features.map(feature => {
           const pNum = feature.properties.precinct;
           const pData = rateMap[pNum];
-          const fill = pData?.isTourist ? '#e5e5e5' : crimeColor(pData?.rate, minRate, maxRate);
+          const fill = pData?.isTourist ? '#e5e5e5'
+            : mapMode === 'change' ? changeColor(pData?.pctChange, maxAbsChange)
+            : crimeColor(pData?.rate, minRate, maxRate);
           return (
             <g key={pNum}>
               <path
@@ -522,6 +543,13 @@ const PrecinctMap = ({ precinctRates, onSelect, activeGeo, width = 520, height =
           {PRECINCT_NEIGHBORHOODS[hoveredData.precinct] && <div className="text-gray-500 mb-2">{PRECINCT_NEIGHBORHOODS[hoveredData.precinct]}</div>}
           {hoveredData.isTourist ? (
             <div className="text-gray-500 italic">Tourist/commercial hub — rates not comparable</div>
+          ) : mapMode === 'change' ? (
+            <>
+              <div className="font-bold" style={{ color: hoveredData.pctChange > 0 ? '#c0392b' : hoveredData.pctChange < 0 ? '#27ae60' : '#333' }}>
+                {hoveredData.pctChange != null ? `${hoveredData.pctChange > 0 ? '+' : ''}${hoveredData.pctChange.toFixed(1)}% vs last year` : 'No change data'}
+              </div>
+              <div className="text-gray-600">{hoveredData.count.toLocaleString()} current vs {hoveredData.priorCount?.toLocaleString() ?? '?'} prior</div>
+            </>
           ) : (
             <>
               <div className="font-bold text-black">{hoveredData.count.toLocaleString()} incidents</div>
@@ -532,9 +560,19 @@ const PrecinctMap = ({ precinctRates, onSelect, activeGeo, width = 520, height =
       )}
       {/* Legend */}
       <div className="flex items-center gap-2 mt-3 text-[10px] text-gray-500">
-        <span>Low</span>
-        <div className="flex-1 h-2 rounded" style={{ background: `linear-gradient(to right, rgb(240,240,240), rgb(255,213,189), rgb(255,124,83), rgb(231,70,109), rgb(57,72,130))` }} />
-        <span>High</span>
+        {mapMode === 'change' ? (
+          <>
+            <span>Decrease</span>
+            <div className="flex-1 h-2 rounded" style={{ background: `linear-gradient(to right, rgb(45,160,55), rgb(140,210,140), rgb(240,240,240), rgb(210,140,135), rgb(190,70,65))` }} />
+            <span>Increase</span>
+          </>
+        ) : (
+          <>
+            <span>Low</span>
+            <div className="flex-1 h-2 rounded" style={{ background: `linear-gradient(to right, rgb(240,240,240), rgb(255,213,189), rgb(255,124,83), rgb(231,70,109), rgb(57,72,130))` }} />
+            <span>High</span>
+          </>
+        )}
         <span className="ml-3 pl-3 border-l border-gray-300 flex items-center gap-1">
           <span className="inline-block w-3 h-3 bg-gray-200" style={{ backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 2px, #999 2px, #999 3px)' }} />
           Tourist
@@ -905,6 +943,7 @@ export default function App() {
 
   // Map & AI summary state
   const [mapCrime, setMapCrime] = useState('all');
+  const [mapMode, setMapMode] = useState('rate');
   const [weeklySummary, setWeeklySummary] = useState('');
   const [summaryLoading, setSummaryLoading] = useState(false);
   const summaryDataRef = useRef(null);
@@ -1084,20 +1123,22 @@ export default function App() {
       const d = rawData[pct];
       const felonies = d.seven_major_felonies || {};
       const addl = d.additional_stats || {};
-      let count = 0;
-      const getter = (stats) => safeNum(activeTab === 'ytd' ? stats?.year_to_date?.current_year : stats?.week_to_date?.current_year);
+      let count = 0, priorCount = 0;
+      const getCurrent = (stats) => safeNum(activeTab === 'ytd' ? stats?.year_to_date?.current_year : stats?.week_to_date?.current_year);
+      const getPrior = (stats) => safeNum(activeTab === 'ytd' ? stats?.year_to_date?.prior_year : stats?.week_to_date?.prior_year);
       if (mapCrime === 'all') {
-        Object.values(felonies).forEach(s => { count += getter(s); });
+        Object.values(felonies).forEach(s => { count += getCurrent(s); priorCount += getPrior(s); });
       } else if (mapCrime === 'violent') {
-        ['Murder', 'Rape', 'Robbery', 'Fel. Assault'].forEach(c => { if (felonies[c]) count += getter(felonies[c]); });
+        ['Murder', 'Rape', 'Robbery', 'Fel. Assault'].forEach(c => { if (felonies[c]) { count += getCurrent(felonies[c]); priorCount += getPrior(felonies[c]); } });
       } else if (mapCrime === 'property') {
-        ['Burglary', 'Gr. Larceny', 'G.L.A.'].forEach(c => { if (felonies[c]) count += getter(felonies[c]); });
+        ['Burglary', 'Gr. Larceny', 'G.L.A.'].forEach(c => { if (felonies[c]) { count += getCurrent(felonies[c]); priorCount += getPrior(felonies[c]); } });
       } else {
         const all = { ...felonies, ...addl };
-        if (all[mapCrime]) count = getter(all[mapCrime]);
+        if (all[mapCrime]) { count = getCurrent(all[mapCrime]); priorCount = getPrior(all[mapCrime]); }
       }
       const precinctNum = pct.replace(/\D+/g, '').replace(/^0+/, '');
-      return { precinct: pct, precinctNum, rate: pop ? (count / pop) * 100000 : null, count, isTourist: TOURIST_PRECINCTS.includes(pct) };
+      const pctChange = priorCount > 0 ? ((count - priorCount) / priorCount) * 100 : null;
+      return { precinct: pct, precinctNum, rate: pop ? (count / pop) * 100000 : null, count, priorCount, pctChange, isTourist: TOURIST_PRECINCTS.includes(pct) };
     });
   }, [rawData, activeTab, mapCrime]);
 
@@ -1544,25 +1585,32 @@ export default function App() {
             <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-5 gap-4">
               <div>
                 <h2 className="text-[11px] font-black uppercase tracking-[0.15em] text-gray-400 mb-1">Geographic View</h2>
-                <p className="text-sm text-gray-500 font-serif">Crime rates per 100k residents by precinct. Click any precinct to drill down.
+                <p className="text-sm text-gray-500 font-serif">{mapMode === 'change' ? 'Year-over-year percent change by precinct.' : 'Crime rates per 100k residents by precinct.'} Click any precinct to drill down.
                   {hotspots?.inequality && <span className="ml-1 text-gray-400">The {hotspots.inequality.topCount} highest-crime precincts ({formatPop(hotspots.inequality.topPop)} residents) match the violent crime total of the {hotspots.inequality.bottomCount} safest ({formatPop(hotspots.inequality.bottomPop)} residents).</span>}
                 </p>
               </div>
-              <div className="flex flex-wrap gap-1 bg-gray-100 p-1 rounded border border-gray-200">
-                {[['all', 'All Major'], ['violent', 'Violent'], ['property', 'Property']].map(([val, label]) => (
-                  <button key={val} onClick={() => setMapCrime(val)} className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-sm transition-colors ${mapCrime === val ? 'bg-white shadow-sm text-black' : 'text-gray-500 hover:text-black'}`}>{label}</button>
-                ))}
-                <select value={['all', 'violent', 'property'].includes(mapCrime) ? '' : mapCrime} onChange={e => e.target.value && setMapCrime(e.target.value)} className="text-[10px] font-black uppercase tracking-widest bg-transparent border-none focus:outline-none text-gray-500 cursor-pointer pl-2">
-                  <option value="">Crime...</option>
-                  {['Murder', 'Rape', 'Robbery', 'Fel. Assault', 'Burglary', 'Gr. Larceny', 'G.L.A.', 'Petit Larceny', 'Misd. Assault'].map(c => (
-                    <option key={c} value={c}>{c}</option>
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex gap-1 bg-gray-100 p-1 rounded border border-gray-200">
+                  {[['rate', 'Rate'], ['change', 'Change']].map(([val, label]) => (
+                    <button key={val} onClick={() => setMapMode(val)} className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-sm transition-colors ${mapMode === val ? 'bg-white shadow-sm text-black' : 'text-gray-500 hover:text-black'}`}>{label}</button>
                   ))}
-                </select>
+                </div>
+                <div className="flex gap-1 bg-gray-100 p-1 rounded border border-gray-200">
+                  {[['all', 'All Major'], ['violent', 'Violent'], ['property', 'Property']].map(([val, label]) => (
+                    <button key={val} onClick={() => setMapCrime(val)} className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-sm transition-colors ${mapCrime === val ? 'bg-white shadow-sm text-black' : 'text-gray-500 hover:text-black'}`}>{label}</button>
+                  ))}
+                  <select value={['all', 'violent', 'property'].includes(mapCrime) ? '' : mapCrime} onChange={e => e.target.value && setMapCrime(e.target.value)} className="text-[10px] font-black uppercase tracking-widest bg-transparent border-none focus:outline-none text-gray-500 cursor-pointer pl-2">
+                    <option value="">Crime...</option>
+                    {['Murder', 'Rape', 'Robbery', 'Fel. Assault', 'Burglary', 'Gr. Larceny', 'G.L.A.', 'Petit Larceny', 'Misd. Assault'].map(c => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
             </div>
             <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
               <div className="lg:col-span-3">
-                <PrecinctMap precinctRates={precinctRates} onSelect={setActiveGeo} activeGeo={activeGeo} />
+                <PrecinctMap precinctRates={precinctRates} onSelect={setActiveGeo} activeGeo={activeGeo} mapMode={mapMode} />
               </div>
               <div className="lg:col-span-2">
                 <PrecinctRankingBars precinctRates={precinctRates} onSelect={setActiveGeo} />
