@@ -585,42 +585,49 @@ const PrecinctMap = ({ precinctRates, onSelect, activeGeo, mapMode = 'rate', wid
 /* ------------------------------------------------------------------ */
 /* PRECINCT RANKING BARS                                               */
 /* ------------------------------------------------------------------ */
-const PrecinctRankingBars = ({ precinctRates, onSelect }) => {
+const PrecinctRankingBars = ({ precinctRates, onSelect, mapMode = 'rate' }) => {
   const { top5, bottom5 } = useMemo(() => {
+    if (mapMode === 'change') {
+      const valid = precinctRates.filter(p => p.pctChange != null && !p.isTourist && p.priorCount > 5).sort((a, b) => b.pctChange - a.pctChange);
+      return { top5: valid.slice(0, 5), bottom5: valid.slice(-5).reverse() };
+    }
     const valid = precinctRates.filter(p => p.rate != null && !p.isTourist).sort((a, b) => b.rate - a.rate);
     return { top5: valid.slice(0, 5), bottom5: valid.slice(-5).reverse() };
-  }, [precinctRates]);
+  }, [precinctRates, mapMode]);
 
-  const maxRate = top5[0]?.rate || 1;
-
-  const renderBar = (item, color, maxW) => {
-    const barW = Math.max(4, (item.rate / maxRate) * maxW);
+  const renderBar = (item, color, maxW, maxVal) => {
+    const val = mapMode === 'change' ? Math.abs(item.pctChange) : item.rate;
+    const barW = Math.max(4, (val / (maxVal || 1)) * maxW);
     const hood = PRECINCT_NEIGHBORHOODS[item.precinct];
     const label = hood ? `${item.precinct.replace(' Precinct', '')} (${hood.split(',')[0]})` : item.precinct.replace(' Precinct', '');
+    const displayVal = mapMode === 'change' ? `${item.pctChange > 0 ? '+' : ''}${item.pctChange.toFixed(1)}%` : item.rate.toFixed(0);
     return (
       <div key={item.precinct} className="flex items-center gap-2 py-1 cursor-pointer hover:bg-gray-50 -mx-2 px-2 rounded transition-colors" onClick={() => onSelect(item.precinct)}>
         <span className="text-[11px] font-bold text-gray-800 w-28 truncate flex-shrink-0" title={item.precinct}>{label}</span>
         <div className="flex-1 flex items-center gap-2">
           <div className="h-4 rounded-sm" style={{ width: `${(barW / maxW) * 100}%`, minWidth: 4, background: color }} />
-          <span className="text-[11px] font-bold tabular-nums" style={{ color }}>{item.rate.toFixed(0)}</span>
+          <span className="text-[11px] font-bold tabular-nums" style={{ color }}>{displayVal}</span>
         </div>
       </div>
     );
   };
 
+  const topMax = mapMode === 'change' ? Math.abs(top5[0]?.pctChange || 1) : (top5[0]?.rate || 1);
+  const botMax = mapMode === 'change' ? Math.abs(bottom5[0]?.pctChange || 1) : (top5[0]?.rate || 1);
+
   return (
     <div className="flex flex-col justify-between h-full">
       <div>
         <div className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-3 flex items-center gap-1" style={{ color: VC.magenta }}>
-          <TrendingUp size={12} /> Highest Rate (per 100k)
+          <TrendingUp size={12} /> {mapMode === 'change' ? 'Biggest increases' : 'Highest rate (per 100k)'}
         </div>
-        {top5.map(item => renderBar(item, VC.magenta, 200))}
+        {top5.map(item => renderBar(item, VC.magenta, 200, topMax))}
       </div>
       <div className="mt-6 pt-4 border-t border-gray-100">
         <div className="text-[10px] font-black uppercase tracking-widest mb-3 flex items-center gap-1" style={{ color: VC.green }}>
-          <TrendingDown size={12} /> Lowest Rate (per 100k)
+          <TrendingDown size={12} /> {mapMode === 'change' ? 'Biggest decreases' : 'Lowest rate (per 100k)'}
         </div>
-        {bottom5.map(item => renderBar(item, VC.green, 200))}
+        {bottom5.map(item => renderBar(item, VC.green, 200, botMax))}
       </div>
     </div>
   );
@@ -1613,7 +1620,7 @@ export default function App() {
                 <PrecinctMap precinctRates={precinctRates} onSelect={setActiveGeo} activeGeo={activeGeo} mapMode={mapMode} />
               </div>
               <div className="lg:col-span-2">
-                <PrecinctRankingBars precinctRates={precinctRates} onSelect={setActiveGeo} />
+                <PrecinctRankingBars precinctRates={precinctRates} onSelect={setActiveGeo} mapMode={mapMode} />
               </div>
             </div>
           </section>
