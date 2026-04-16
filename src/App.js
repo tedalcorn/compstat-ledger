@@ -543,6 +543,88 @@ const CityComparisonWidget = ({ rtciData }) => {
 };
 
 /* ------------------------------------------------------------------ */
+/* TRANSIT CRIME BOX                                                   */
+/* ------------------------------------------------------------------ */
+const TransitCrimeBox = ({ rawData }) => {
+  const cw = rawData?.citywide;
+  const transit = cw?.additional_stats?.Transit;
+  const housing = cw?.additional_stats?.Housing;
+  if (!transit) return null;
+
+  const period = cw?.report_period || {};
+  const fmtPct = (v) => {
+    if (v == null || !isFinite(v)) return '—';
+    const sign = v > 0 ? '+' : '';
+    return `${sign}${v.toFixed(1)}%`;
+  };
+  const pctColor = (v) => v == null ? '#6b7280' : v > 0 ? '#c0392b' : v < 0 ? '#1f7a3a' : '#6b7280';
+
+  const ytd = transit.year_to_date || {};
+  const wtd = transit.week_to_date || {};
+  const m28 = transit.twenty_eight_day || {};
+  const hist = transit.historical || {};
+  const ytdDiff = (ytd.current_year ?? 0) - (ytd.prior_year ?? 0);
+
+  const Row = ({ label, cur, prior, pct, sub }) => (
+    <div className="flex-1 min-w-[140px]">
+      <div className="text-[9px] font-black uppercase tracking-widest text-gray-400 mb-1">{label}</div>
+      <div className="flex items-baseline gap-2">
+        <span className="text-[22px] font-black text-black tabular-nums leading-none">{cur != null ? cur.toLocaleString() : '—'}</span>
+        <span className="text-[12px] font-bold tabular-nums" style={{ color: pctColor(pct) }}>{fmtPct(pct)}</span>
+      </div>
+      <div className="text-[10px] text-gray-500 mt-1">vs {prior != null ? prior.toLocaleString() : '—'} prior {sub}</div>
+    </div>
+  );
+
+  return (
+    <section className="mb-10 p-5 bg-white rounded-sm border-l-4 border-gray-900 border-t border-r border-b border-gray-200">
+      <div className="flex items-start justify-between mb-4 gap-3">
+        <div>
+          <h3 className="text-[10px] font-black uppercase tracking-[0.15em] text-gray-400">Transit System · Major Felony Index</h3>
+          <p className="text-[13px] font-serif text-gray-600 mt-0.5">
+            Total major index offenses recorded on the NYC subway and bus system, reported weekly by NYPD.
+          </p>
+        </div>
+        <div className="text-right flex-shrink-0">
+          <div className="text-[9px] font-black uppercase tracking-widest text-gray-400">YTD Δ</div>
+          <div className="text-[14px] font-black tabular-nums" style={{ color: pctColor(ytd.pct_change) }}>
+            {ytdDiff > 0 ? '+' : ''}{ytdDiff.toLocaleString()}
+          </div>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap gap-6 pb-4 border-b border-gray-100">
+        <Row label="Year to date" cur={ytd.current_year} prior={ytd.prior_year} pct={ytd.pct_change} sub="YTD" />
+        <Row label="Last 28 days" cur={m28.current_year} prior={m28.prior_year} pct={m28.pct_change} sub="period" />
+        <Row label="This week" cur={wtd.current_year} prior={wtd.prior_year} pct={wtd.pct_change} sub="week" />
+      </div>
+
+      <div className="flex flex-wrap items-center justify-between gap-3 mt-3 text-[11px]">
+        <div className="flex flex-wrap gap-4 text-gray-500">
+          {hist['2_yr_pct'] != null && (
+            <span>vs 2 yrs ago: <strong className="tabular-nums" style={{ color: pctColor(hist['2_yr_pct']) }}>{fmtPct(hist['2_yr_pct'])}</strong></span>
+          )}
+          {hist['14_yr_pct'] != null && (
+            <span>vs 14 yrs ago: <strong className="tabular-nums" style={{ color: pctColor(hist['14_yr_pct']) }}>{fmtPct(hist['14_yr_pct'])}</strong></span>
+          )}
+          {housing?.year_to_date?.pct_change != null && (
+            <span className="pl-4 border-l border-gray-200">
+              Housing YTD: <strong className="tabular-nums text-black">{housing.year_to_date.current_year?.toLocaleString()}</strong>
+              <span className="ml-1 tabular-nums" style={{ color: pctColor(housing.year_to_date.pct_change) }}>{fmtPct(housing.year_to_date.pct_change)}</span>
+            </span>
+          )}
+        </div>
+        <div className="text-[10px] text-gray-400">Report period {period.week_start || '?'} – {period.week_end || '?'}</div>
+      </div>
+
+      <p className="text-[10px] text-gray-400 mt-3 italic leading-snug">
+        NYPD's citywide CompStat roll-up reports Transit as a single aggregate covering the seven major felonies (murder, rape, robbery, felony assault, burglary, grand larceny, grand larceny auto) on the subway and bus system. Robbery and grand larceny historically make up the bulk of transit incidents, but per-offense detail is published separately by the NYPD Transit Bureau rather than in this weekly report.
+      </p>
+    </section>
+  );
+};
+
+/* ------------------------------------------------------------------ */
 /* PRECINCT CHOROPLETH MAP                                             */
 /* ------------------------------------------------------------------ */
 const PrecinctMap = ({ precinctRates, onSelect, activeGeo, mapMode = 'rate', width = 520, height = 520 }) => {
@@ -1765,6 +1847,8 @@ export default function App() {
             </div>
           </section>
         )}
+
+        {activeGeo === 'citywide' && <TransitCrimeBox rawData={rawData} />}
 
         {activeGeo === 'citywide' && <CityComparisonWidget rtciData={rtciData} />}
 
