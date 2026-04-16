@@ -545,10 +545,70 @@ const CityComparisonWidget = ({ rtciData }) => {
 /* ------------------------------------------------------------------ */
 /* TRANSIT CRIME BOX                                                   */
 /* ------------------------------------------------------------------ */
+const TRANSIT_OFFENSE_LABELS = {
+  'GRAND LARCENY': 'Grand Larceny',
+  'DANGEROUS WEAPONS': 'Dangerous Weapons',
+  'CRIMINAL MISCHIEF & RELATED OF': 'Criminal Mischief',
+  'FELONY ASSAULT': 'Felony Assault',
+  'FORGERY': 'Forgery',
+  'MISCELLANEOUS PENAL LAW': 'Misc. Penal Law',
+  'DANGEROUS DRUGS': 'Dangerous Drugs',
+  'ROBBERY': 'Robbery',
+  'SEX CRIMES': 'Sex Crimes',
+  'THEFT-FRAUD': 'Theft/Fraud',
+  'POSSESSION OF STOLEN PROPERTY': 'Stolen Property',
+  'BURGLARY': 'Burglary',
+  'RAPE': 'Rape',
+  'KIDNAPPING & RELATED OFFENSES': 'Kidnapping',
+  'ARSON': 'Arson',
+  'MURDER & NON-NEGL. MANSLAUGHTER': 'Murder',
+};
+
 const TransitCrimeBox = ({ rawData }) => {
   const cw = rawData?.citywide;
   const transit = cw?.additional_stats?.Transit;
   const housing = cw?.additional_stats?.Housing;
+
+  const [breakdown, setBreakdown] = useState(null); // { year, priorYear, rows: [{name, cur, prior, pct}] }
+  const [breakdownLoading, setBreakdownLoading] = useState(true);
+  const [breakdownErr, setBreakdownErr] = useState(false);
+
+  useEffect(() => {
+    const fetchOne = (url) => fetch(url).then(r => r.ok ? r.json() : Promise.reject(r.status));
+    // Current year (5uac-w243) covers most recent complete year; historic (qgea-i56i) covers 2006+
+    const curUrl = "https://data.cityofnewyork.us/resource/5uac-w243.json?" +
+      "$select=ofns_desc,count(*) AS n&$where=transit_district IS NOT NULL AND law_cat_cd='FELONY'&$group=ofns_desc&$order=n DESC&$limit=50";
+    const maxUrl = "https://data.cityofnewyork.us/resource/5uac-w243.json?$select=max(rpt_dt) AS max,min(rpt_dt) AS min";
+    Promise.all([fetchOne(curUrl), fetchOne(maxUrl)])
+      .then(([rows, meta]) => {
+        const maxDate = meta?.[0]?.max ? new Date(meta[0].max) : null;
+        const year = maxDate ? maxDate.getFullYear() : 2025;
+        const priorYear = year - 1;
+        const priorUrl = "https://data.cityofnewyork.us/resource/qgea-i56i.json?" +
+          `$select=ofns_desc,count(*) AS n&$where=transit_district IS NOT NULL AND law_cat_cd='FELONY' AND rpt_dt>='${priorYear}-01-01T00:00:00' AND rpt_dt<'${year}-01-01T00:00:00'&$group=ofns_desc&$order=n DESC&$limit=50`;
+        return fetchOne(priorUrl).then(prior => {
+          const curMap = {};
+          rows.forEach(r => { curMap[r.ofns_desc] = parseInt(r.n, 10) || 0; });
+          const priMap = {};
+          prior.forEach(r => { priMap[r.ofns_desc] = parseInt(r.n, 10) || 0; });
+          const names = new Set([...Object.keys(curMap), ...Object.keys(priMap)]);
+          const combined = [];
+          names.forEach(n => {
+            const cur = curMap[n] || 0;
+            const pri = priMap[n] || 0;
+            const pct = pri > 0 ? ((cur - pri) / pri) * 100 : (cur > 0 ? 100 : 0);
+            combined.push({ name: n, label: TRANSIT_OFFENSE_LABELS[n] || n, cur, prior: pri, pct, diff: cur - pri });
+          });
+          combined.sort((a, b) => b.cur - a.cur);
+          const totalCur = combined.reduce((s, r) => s + r.cur, 0);
+          const totalPri = combined.reduce((s, r) => s + r.prior, 0);
+          setBreakdown({ year, priorYear, rows: combined, totalCur, totalPri });
+          setBreakdownLoading(false);
+        });
+      })
+      .catch(() => { setBreakdownErr(true); setBreakdownLoading(false); });
+  }, []);
+
   if (!transit) return null;
 
   const period = cw?.report_period || {};
@@ -576,13 +636,16 @@ const TransitCrimeBox = ({ rawData }) => {
     </div>
   );
 
+  const topRows = breakdown?.rows?.filter(r => r.cur > 0 || r.prior > 0).slice(0, 10) || [];
+  const maxVal = topRows.reduce((m, r) => Math.max(m, r.cur, r.prior), 1);
+
   return (
     <section className="mb-10 p-5 bg-white rounded-sm border-l-4 border-gray-900 border-t border-r border-b border-gray-200">
       <div className="flex items-start justify-between mb-4 gap-3">
         <div>
           <h3 className="text-[10px] font-black uppercase tracking-[0.15em] text-gray-400">Transit System · Major Felony Index</h3>
           <p className="text-[13px] font-serif text-gray-600 mt-0.5">
-            Total major index offenses recorded on the NYC subway and bus system, reported weekly by NYPD.
+            Total major index offenses recorded on the NYC subway and bus system.
           </p>
         </div>
         <div className="text-right flex-shrink-0">
@@ -599,7 +662,7 @@ const TransitCrimeBox = ({ rawData }) => {
         <Row label="This week" cur={wtd.current_year} prior={wtd.prior_year} pct={wtd.pct_change} sub="week" />
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-3 mt-3 text-[11px]">
+      <div className="flex flex-wrap items-center justify-between gap-3 mt-3 pb-3 text-[11px] border-b border-gray-100">
         <div className="flex flex-wrap gap-4 text-gray-500">
           {hist['2_yr_pct'] != null && (
             <span>vs 2 yrs ago: <strong className="tabular-nums" style={{ color: pctColor(hist['2_yr_pct']) }}>{fmtPct(hist['2_yr_pct'])}</strong></span>
@@ -614,11 +677,66 @@ const TransitCrimeBox = ({ rawData }) => {
             </span>
           )}
         </div>
-        <div className="text-[10px] text-gray-400">Report period {period.week_start || '?'} – {period.week_end || '?'}</div>
+        <div className="text-[10px] text-gray-400">CompStat week ending {period.week_end || '?'}</div>
       </div>
 
-      <p className="text-[10px] text-gray-400 mt-3 italic leading-snug">
-        NYPD's citywide CompStat roll-up reports Transit as a single aggregate covering the seven major felonies (murder, rape, robbery, felony assault, burglary, grand larceny, grand larceny auto) on the subway and bus system. Robbery and grand larceny historically make up the bulk of transit incidents, but per-offense detail is published separately by the NYPD Transit Bureau rather than in this weekly report.
+      {/* Per-offense annual breakdown from NYC Open Data */}
+      <div className="mt-4">
+        <div className="flex items-baseline justify-between mb-3">
+          <div>
+            <h4 className="text-[10px] font-black uppercase tracking-widest text-gray-500">By offense type · {breakdown ? `${breakdown.year} vs ${breakdown.priorYear}` : 'Loading…'}</h4>
+            <p className="text-[11px] text-gray-500 italic mt-0.5">Full-year totals from NYPD complaint-level data (Open Data). Updates annually — more granular than the weekly CompStat figure above.</p>
+          </div>
+          {breakdown && (
+            <div className="text-right">
+              <div className="text-[9px] font-black uppercase tracking-widest text-gray-400">Total felonies</div>
+              <div className="text-[14px] font-black tabular-nums text-black">{breakdown.totalCur.toLocaleString()}</div>
+              <div className="text-[10px] tabular-nums" style={{ color: pctColor(((breakdown.totalCur - breakdown.totalPri) / (breakdown.totalPri || 1)) * 100) }}>
+                {fmtPct(((breakdown.totalCur - breakdown.totalPri) / (breakdown.totalPri || 1)) * 100)} vs {breakdown.totalPri.toLocaleString()}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {breakdownLoading && <div className="text-[11px] text-gray-400 italic py-4">Fetching per-offense breakdown from NYC Open Data…</div>}
+        {breakdownErr && <div className="text-[11px] text-gray-400 italic py-4">Per-offense breakdown unavailable — NYC Open Data could not be reached.</div>}
+        {breakdown && (
+          <div className="space-y-1">
+            {topRows.map(r => {
+              const curW = (r.cur / maxVal) * 100;
+              const priW = (r.prior / maxVal) * 100;
+              return (
+                <div key={r.name} className="flex items-center gap-3 py-1 text-[11px]">
+                  <span className="w-32 flex-shrink-0 font-bold text-gray-800 truncate" title={r.label}>{r.label}</span>
+                  <div className="flex-1 min-w-[120px]">
+                    <div className="relative h-[10px]">
+                      <div className="absolute top-0 left-0 h-[4px] rounded-sm bg-gray-900" style={{ width: `${curW}%` }} />
+                      <div className="absolute top-[6px] left-0 h-[4px] rounded-sm bg-gray-300" style={{ width: `${priW}%` }} />
+                    </div>
+                  </div>
+                  <span className="w-14 text-right tabular-nums font-bold text-black">{r.cur.toLocaleString()}</span>
+                  <span className="w-14 text-right tabular-nums text-gray-400">{r.prior.toLocaleString()}</span>
+                  <span className="w-14 text-right tabular-nums font-bold" style={{ color: pctColor(r.pct) }}>{fmtPct(r.pct)}</span>
+                </div>
+              );
+            })}
+            <div className="flex items-center gap-3 pt-2 mt-1 text-[9px] font-bold uppercase tracking-widest text-gray-400 border-t border-gray-100">
+              <span className="w-32">Offense</span>
+              <div className="flex-1 min-w-[120px] flex items-center gap-3">
+                <span className="flex items-center gap-1"><span className="inline-block w-3 h-[4px] bg-gray-900 rounded-sm" /> {breakdown.year}</span>
+                <span className="flex items-center gap-1"><span className="inline-block w-3 h-[4px] bg-gray-300 rounded-sm" /> {breakdown.priorYear}</span>
+              </div>
+              <span className="w-14 text-right">{breakdown.year}</span>
+              <span className="w-14 text-right">{breakdown.priorYear}</span>
+              <span className="w-14 text-right">Δ</span>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <p className="text-[10px] text-gray-400 mt-4 italic leading-snug">
+        Top block: NYPD CompStat weekly aggregate (subway + bus, all major felonies combined) — updates every Monday.
+        Lower block: NYC Open Data complaint-level extract filtered to incidents with a transit-district code — updates on the city's annual schedule, so the comparison year is the most recent complete calendar year.
       </p>
     </section>
   );
