@@ -550,26 +550,26 @@ const PrecinctMap = ({ precinctRates, onSelect, activeGeo, mapMode = 'rate', wid
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   const svgRef = useRef(null);
 
-  const { pathFn, rateMap, minRate, maxRate, maxAbsChange } = useMemo(() => {
+  const { pathFn, rateMap, minRate, maxRate, maxAbsChange, maxAbsDelta } = useMemo(() => {
     const projection = geoMercator().fitSize([width, height], precinctGeoJSON);
     const pathFn = geoPath().projection(projection);
     const rateMap = {};
-    let minR = Infinity, maxR = 0, maxAbs = 0;
+    let minR = Infinity, maxR = 0, maxAbs = 0, maxDelta = 0;
     precinctRates.forEach(p => {
+      p.countDelta = (p.count != null && p.priorCount != null) ? (p.count - p.priorCount) : null;
       rateMap[p.precinctNum] = p;
       if (!p.isTourist) {
         if (p.rate != null) {
           if (p.rate < minR) minR = p.rate;
           if (p.rate > maxR) maxR = p.rate;
         }
-        if (p.pctChange != null) {
-          maxAbs = Math.max(maxAbs, Math.abs(p.pctChange));
-        }
+        if (p.pctChange != null) maxAbs = Math.max(maxAbs, Math.abs(p.pctChange));
+        if (p.countDelta != null) maxDelta = Math.max(maxDelta, Math.abs(p.countDelta));
       }
     });
     if (minR === Infinity) minR = 0;
     if (maxAbs > 100) maxAbs = 100;
-    return { pathFn, rateMap, minRate: minR, maxRate: maxR, maxAbsChange: maxAbs };
+    return { pathFn, rateMap, minRate: minR, maxRate: maxR, maxAbsChange: maxAbs, maxAbsDelta: maxDelta };
   }, [precinctRates, width, height]);
 
   const handleMouse = (e) => {
@@ -601,6 +601,7 @@ const PrecinctMap = ({ precinctRates, onSelect, activeGeo, mapMode = 'rate', wid
           const pData = rateMap[pNum];
           const fill = pData?.isTourist ? '#e5e5e5'
             : mapMode === 'change' ? changeColor(pData?.pctChange, maxAbsChange)
+            : mapMode === 'volume' ? changeColor(pData?.countDelta, maxAbsDelta)
             : crimeColor(pData?.rate, minRate, maxRate);
           return (
             <g key={pNum}>
@@ -637,11 +638,13 @@ const PrecinctMap = ({ precinctRates, onSelect, activeGeo, mapMode = 'rate', wid
               <>
                 <div className="font-bold text-black">{hoveredData.count.toLocaleString()} incidents</div>
                 {hoveredData.rate != null && <div className="text-gray-600">{hoveredData.rate.toFixed(1)} per 100k{rankInfo ? ` · Rank ${rankInfo.rank} of ${rankInfo.total}` : ''}</div>}
-                {hoveredData.pctChange != null && (
-                  <div className="font-medium mt-1" style={{ color: hoveredData.pctChange > 0 ? '#c0392b' : hoveredData.pctChange < 0 ? '#27ae60' : '#333' }}>
-                    {hoveredData.pctChange > 0 ? '+' : ''}{hoveredData.pctChange.toFixed(1)}% vs last year ({hoveredData.priorCount?.toLocaleString() ?? '?'} prior)
+                {hoveredData.countDelta != null && (
+                  <div className="font-medium mt-1" style={{ color: hoveredData.countDelta > 0 ? '#c0392b' : hoveredData.countDelta < 0 ? '#27ae60' : '#333' }}>
+                    {hoveredData.countDelta > 0 ? '+' : ''}{hoveredData.countDelta.toLocaleString()} incidents vs last year
+                    {hoveredData.pctChange != null && <span className="text-gray-500 font-normal"> ({hoveredData.pctChange > 0 ? '+' : ''}{hoveredData.pctChange.toFixed(1)}%)</span>}
                   </div>
                 )}
+                {hoveredData.priorCount != null && <div className="text-gray-400 text-[10px]">{hoveredData.priorCount.toLocaleString()} prior year</div>}
                 {pop && <div className="text-gray-400 mt-1">Pop. {pop.toLocaleString()}</div>}
               </>
             )}
@@ -650,11 +653,11 @@ const PrecinctMap = ({ precinctRates, onSelect, activeGeo, mapMode = 'rate', wid
       })()}
       {/* Legend */}
       <div className="flex items-center gap-2 mt-3 text-[10px] text-gray-500">
-        {mapMode === 'change' ? (
+        {mapMode === 'change' || mapMode === 'volume' ? (
           <>
-            <span>Decrease</span>
+            <span>{mapMode === 'volume' ? 'Fewer incidents' : 'Decrease'}</span>
             <div className="flex-1 h-2 rounded" style={{ background: `linear-gradient(to right, rgb(45,160,55), rgb(140,210,140), rgb(240,240,240), rgb(210,140,135), rgb(190,70,65))` }} />
-            <span>Increase</span>
+            <span>{mapMode === 'volume' ? 'More incidents' : 'Increase'}</span>
           </>
         ) : (
           <>
@@ -681,16 +684,26 @@ const PrecinctRankingBars = ({ precinctRates, onSelect, mapMode = 'rate' }) => {
       const valid = precinctRates.filter(p => p.pctChange != null && !p.isTourist && p.priorCount > 5).sort((a, b) => b.pctChange - a.pctChange);
       return { top5: valid.slice(0, 5), bottom5: valid.slice(-5).reverse() };
     }
+    if (mapMode === 'volume') {
+      const valid = precinctRates.filter(p => p.count != null && p.priorCount != null && !p.isTourist)
+        .map(p => ({ ...p, countDelta: p.count - p.priorCount }))
+        .sort((a, b) => b.countDelta - a.countDelta);
+      return { top5: valid.slice(0, 5), bottom5: valid.slice(-5).reverse() };
+    }
     const valid = precinctRates.filter(p => p.rate != null && !p.isTourist).sort((a, b) => b.rate - a.rate);
     return { top5: valid.slice(0, 5), bottom5: valid.slice(-5).reverse() };
   }, [precinctRates, mapMode]);
 
   const renderBar = (item, color, maxW, maxVal) => {
-    const val = mapMode === 'change' ? Math.abs(item.pctChange) : item.rate;
+    const val = mapMode === 'change' ? Math.abs(item.pctChange)
+      : mapMode === 'volume' ? Math.abs(item.countDelta)
+      : item.rate;
     const barW = Math.max(4, (val / (maxVal || 1)) * maxW);
     const hood = PRECINCT_NEIGHBORHOODS[item.precinct];
     const label = hood ? `${item.precinct.replace(' Precinct', '')} (${hood.split(',')[0]})` : item.precinct.replace(' Precinct', '');
-    const displayVal = mapMode === 'change' ? `${item.pctChange > 0 ? '+' : ''}${item.pctChange.toFixed(1)}%` : item.rate.toFixed(0);
+    const displayVal = mapMode === 'change' ? `${item.pctChange > 0 ? '+' : ''}${item.pctChange.toFixed(1)}%`
+      : mapMode === 'volume' ? `${item.countDelta > 0 ? '+' : ''}${item.countDelta.toLocaleString()}`
+      : item.rate.toFixed(0);
     return (
       <div key={item.precinct} className="flex items-center gap-2 py-1 cursor-pointer hover:bg-gray-50 -mx-2 px-2 rounded transition-colors" onClick={() => onSelect(item.precinct)}>
         <span className="text-[11px] font-bold text-gray-800 w-28 truncate flex-shrink-0" title={item.precinct}>{label}</span>
@@ -702,20 +715,24 @@ const PrecinctRankingBars = ({ precinctRates, onSelect, mapMode = 'rate' }) => {
     );
   };
 
-  const topMax = mapMode === 'change' ? Math.abs(top5[0]?.pctChange || 1) : (top5[0]?.rate || 1);
-  const botMax = mapMode === 'change' ? Math.abs(bottom5[0]?.pctChange || 1) : (top5[0]?.rate || 1);
+  const topMax = mapMode === 'change' ? Math.abs(top5[0]?.pctChange || 1)
+    : mapMode === 'volume' ? Math.abs(top5[0]?.countDelta || 1)
+    : (top5[0]?.rate || 1);
+  const botMax = mapMode === 'change' ? Math.abs(bottom5[0]?.pctChange || 1)
+    : mapMode === 'volume' ? Math.abs(bottom5[0]?.countDelta || 1)
+    : (top5[0]?.rate || 1);
 
   return (
     <div className="flex flex-col justify-between h-full">
       <div>
         <div className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-3 flex items-center gap-1" style={{ color: VC.magenta }}>
-          <TrendingUp size={12} /> {mapMode === 'change' ? 'Biggest increases' : 'Highest rate (per 100k)'}
+          <TrendingUp size={12} /> {mapMode === 'change' ? 'Biggest % increases' : mapMode === 'volume' ? 'Biggest volume gains' : 'Highest rate (per 100k)'}
         </div>
         {top5.map(item => renderBar(item, VC.magenta, 200, topMax))}
       </div>
       <div className="mt-6 pt-4 border-t border-gray-100">
         <div className="text-[10px] font-black uppercase tracking-widest mb-3 flex items-center gap-1" style={{ color: VC.green }}>
-          <TrendingDown size={12} /> {mapMode === 'change' ? 'Biggest decreases' : 'Lowest rate (per 100k)'}
+          <TrendingDown size={12} /> {mapMode === 'change' ? 'Biggest % decreases' : mapMode === 'volume' ? 'Biggest volume drops' : 'Lowest rate (per 100k)'}
         </div>
         {bottom5.map(item => renderBar(item, VC.green, 200, botMax))}
       </div>
@@ -1715,13 +1732,13 @@ export default function App() {
             <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-5 gap-4">
               <div>
                 <h2 className="text-[11px] font-black uppercase tracking-[0.15em] text-gray-400 mb-1">Geographic View</h2>
-                <p className="text-sm text-gray-500 font-serif">{mapMode === 'change' ? 'Year-over-year percent change by precinct.' : 'Crime rates per 100k residents by precinct.'} Click any precinct to drill down.
+                <p className="text-sm text-gray-500 font-serif">{mapMode === 'change' ? 'Year-over-year percent change by precinct.' : mapMode === 'volume' ? 'Absolute change in incident count vs prior year — where the raw numbers are growing or shrinking the most.' : 'Crime rates per 100k residents by precinct.'} Click any precinct to drill down.
                   {hotspots?.inequality && <span className="ml-1 text-gray-400">The {hotspots.inequality.topCount} highest-crime precincts ({formatPop(hotspots.inequality.topPop)} residents) match the violent crime total of the {hotspots.inequality.bottomCount} safest ({formatPop(hotspots.inequality.bottomPop)} residents).</span>}
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-3">
                 <div className="flex gap-1 bg-gray-100 p-1 rounded border border-gray-200">
-                  {[['rate', 'Rate'], ['change', 'Change']].map(([val, label]) => (
+                  {[['rate', 'Rate'], ['change', '% Change'], ['volume', 'Volume Δ']].map(([val, label]) => (
                     <button key={val} onClick={() => setMapMode(val)} className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-sm transition-colors ${mapMode === val ? 'bg-white shadow-sm text-black' : 'text-gray-500 hover:text-black'}`}>{label}</button>
                   ))}
                 </div>
