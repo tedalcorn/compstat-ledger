@@ -637,14 +637,19 @@ const TransitCrimeBox = ({ rawData }) => {
   });
   const maxVal = sorted.reduce((m, r) => Math.max(m, r.cur, r.prior), 1);
 
-  const SortHeader = ({ field, children, align = 'right' }) => (
-    <button
-      onClick={() => setSortBy(field)}
-      className={`text-[9px] font-black uppercase tracking-widest transition-colors ${sortBy === field ? 'text-black' : 'text-gray-400 hover:text-gray-700'} ${align === 'right' ? 'text-right' : 'text-left'}`}
-    >
-      {children}{sortBy === field ? ' ↓' : ''}
-    </button>
-  );
+  const SortHeader = ({ field, children, align = 'right' }) => {
+    const active = sortBy === field;
+    return (
+      <button
+        onClick={() => setSortBy(field)}
+        title={`Sort by ${field}`}
+        className={`group inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-widest cursor-pointer transition-colors ${active ? 'text-black' : 'text-gray-500 hover:text-black'} ${align === 'right' ? 'justify-end' : 'justify-start'}`}
+      >
+        <span className="underline decoration-dotted decoration-gray-300 underline-offset-[3px] group-hover:decoration-black">{children}</span>
+        <span className={`inline-block text-[10px] leading-none transition-opacity ${active ? 'opacity-100 text-black' : 'opacity-40 group-hover:opacity-80'}`}>{active ? '▼' : '↕'}</span>
+      </button>
+    );
+  };
 
   return (
     <section className="mb-10 p-5 bg-white rounded-sm border-l-4 border-gray-900 border-t border-r border-b border-gray-200">
@@ -714,8 +719,16 @@ const TransitCrimeBox = ({ rawData }) => {
         {breakdownErr && <div className="text-[11px] text-gray-400 italic py-4">Per-offense breakdown unavailable — NYC Open Data could not be reached.</div>}
         {breakdown && (
           <div>
-            {/* Sortable header */}
-            <div className="flex items-center gap-3 pb-2 mb-1 border-b border-gray-200">
+            {/* Sort hint + sortable header row */}
+            <div className="flex items-center gap-2 mb-2 text-[10px] text-gray-500">
+              <span className="font-bold uppercase tracking-widest text-[9px] text-gray-400">Sort by:</span>
+              <button onClick={() => setSortBy('volume')} className={`px-2 py-0.5 rounded-sm text-[10px] font-bold uppercase tracking-wide transition-colors ${sortBy === 'volume' ? 'bg-black text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>Volume</button>
+              <button onClick={() => setSortBy('delta')} className={`px-2 py-0.5 rounded-sm text-[10px] font-bold uppercase tracking-wide transition-colors ${sortBy === 'delta' ? 'bg-black text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>Δ Volume</button>
+              <button onClick={() => setSortBy('change')} className={`px-2 py-0.5 rounded-sm text-[10px] font-bold uppercase tracking-wide transition-colors ${sortBy === 'change' ? 'bg-black text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>Δ %</button>
+              <button onClick={() => setSortBy('name')} className={`px-2 py-0.5 rounded-sm text-[10px] font-bold uppercase tracking-wide transition-colors ${sortBy === 'name' ? 'bg-black text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>A–Z</button>
+              <span className="text-[10px] text-gray-400 italic ml-1">(column headers are also clickable)</span>
+            </div>
+            <div className="flex items-center gap-3 pb-2 mb-1 border-b border-gray-200 bg-gray-50 -mx-1 px-1 rounded-sm">
               <SortHeader field="name" align="left"><span className="w-32 inline-block text-left">Offense</span></SortHeader>
               <div className="flex-1 min-w-[120px] flex items-center gap-3 text-[9px] font-bold uppercase tracking-widest text-gray-400">
                 <span className="flex items-center gap-1"><span className="inline-block w-3 h-[4px] bg-gray-900 rounded-sm" /> {breakdown.year}</span>
