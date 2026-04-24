@@ -1966,9 +1966,9 @@ export default function App() {
           </section>
         )}
 
-        {activeGeo === 'citywide' && <TransitCrimeBox rawData={rawData} />}
-
         {activeGeo === 'citywide' && <CityComparisonWidget rtciData={rtciData} />}
+
+        {activeGeo === 'citywide' && <TransitCrimeBox rawData={rawData} />}
 
         <QueryBox
           parsedData={parsedData}
