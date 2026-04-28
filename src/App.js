@@ -1527,9 +1527,15 @@ export default function App() {
     const run = async () => {
       setSummaryLoading(true);
       try {
+        const isYTD = activeTab === 'ytd';
+        const timeframe = isYTD
+          ? `YEAR-TO-DATE through ${parsedData.period?.week_end || 'latest reporting week'}, compared to the same period last year`
+          : `WEEK of ${parsedData.period?.week_start || '?'} to ${parsedData.period?.week_end || '?'}, compared to the same week last year`;
         const ctx = [
-          `Period: ${parsedData.period?.week_start} – ${parsedData.period?.week_end}`,
-          `Total major index: ${parsedData.totals.mCur.toLocaleString()} (${parsedData.totals.mPct > 0 ? '+' : ''}${parsedData.totals.mPct.toFixed(1)}% vs prior year)`,
+          `TIMEFRAME: ${timeframe}`,
+          `All numbers below refer to this exact timeframe unless otherwise noted.`,
+          ``,
+          `Total major index: ${parsedData.totals.mCur.toLocaleString()} (${parsedData.totals.mPct > 0 ? '+' : ''}${parsedData.totals.mPct.toFixed(1)}% vs same period prior year)`,
           `Violent: ${parsedData.totals.vCur.toLocaleString()}, Property: ${parsedData.totals.pCur.toLocaleString()}`,
           parsedData.driver ? `Primary driver: ${parsedData.driver.name} (${parsedData.driver.share.toFixed(0)}% of overall shift)` : '',
           `Murder: ${parsedData.totals.murder}, Shooting victims: ${parsedData.totals.shootingVic}`,
@@ -1543,8 +1549,14 @@ export default function App() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             max_tokens: 250,
-            system: "You are a concise NYC crime data analyst writing for a data-literate audience. Write exactly 2 sentences — the first captures the single most newsworthy pattern this reporting period, the second adds essential context or a striking contrast. Cite specific numbers. No bullet points, no headers, no hedging.",
-            messages: [{ role: 'user', content: `Here is this week's NYC CompStat summary data:\n${ctx}\n\nWrite the 2-sentence headline summary.` }]
+            system: `You are a concise NYC crime data analyst writing for a data-literate audience. Write exactly 2 sentences.
+
+SENTENCE 1: State the single most newsworthy pattern for the timeframe, and explicitly name the timeframe at the start or end of the sentence (e.g. "Year-to-date through [date]…" or "For the week of [date]…"). Never say "this week" if the timeframe is year-to-date, and never say "year-to-date" if the timeframe is a single week.
+
+SENTENCE 2: Add essential context or a striking contrast.
+
+Rules: Cite only numbers that appear in the provided data. Never invent or paraphrase numbers. Do not reference a timeframe other than the one specified. No bullet points, no headers, no hedging.`,
+            messages: [{ role: 'user', content: `CompStat summary data:\n${ctx}\n\nWrite the 2-sentence headline summary, explicitly naming the timeframe in sentence 1.` }]
           })
         });
         if (res.ok) {
@@ -1938,7 +1950,14 @@ export default function App() {
           <section className="mb-10 p-5 bg-gray-50 rounded-lg border border-gray-200">
             <div className="flex items-center gap-2 mb-3">
               <Sparkles size={16} className="text-[#ff7c53]" />
-              <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Story of the Week</span>
+              <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">
+                {activeTab === 'ytd' ? 'Year-to-date summary' : 'Story of the week'}
+              </span>
+              <span className="text-[10px] font-medium text-gray-500 tabular-nums">
+                {activeTab === 'ytd'
+                  ? `Through ${parsedData.period?.week_end || '—'}`
+                  : `${parsedData.period?.week_start || '—'} – ${parsedData.period?.week_end || '—'}`}
+              </span>
               <span className="text-[9px] font-medium text-gray-400 ml-auto uppercase tracking-wider">AI-generated</span>
             </div>
             {summaryLoading ? (
@@ -1954,50 +1973,6 @@ export default function App() {
             <Activity size={12} /> Explore the 30-Year View →
           </button>
         </div>
-
-        {/* Precinct Choropleth Map + Ranking Bars (citywide only) */}
-        {activeGeo === 'citywide' && (
-          <section className="mb-10 pt-8 border-t border-gray-200">
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-5 gap-4">
-              <div>
-                <h2 className="text-[11px] font-black uppercase tracking-[0.15em] text-gray-400 mb-1">Geographic View</h2>
-                <p className="text-sm text-gray-500 font-serif">{mapMode === 'change' ? 'Year-over-year percent change by precinct.' : mapMode === 'volume' ? 'Absolute change in incident count vs prior year — where the raw numbers are growing or shrinking the most.' : 'Crime rates per 100k residents by precinct.'} Click any precinct to drill down.
-                  {hotspots?.inequality && <span className="ml-1 text-gray-400">The {hotspots.inequality.topCount} highest-crime precincts ({formatPop(hotspots.inequality.topPop)} residents) match the violent crime total of the {hotspots.inequality.bottomCount} safest ({formatPop(hotspots.inequality.bottomPop)} residents).</span>}
-                </p>
-              </div>
-              <div className="flex flex-wrap items-center gap-3">
-                <div className="flex gap-1 bg-gray-100 p-1 rounded border border-gray-200">
-                  {[['rate', 'Rate'], ['change', '% Change'], ['volume', 'Volume Δ']].map(([val, label]) => (
-                    <button key={val} onClick={() => setMapMode(val)} className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-sm transition-colors ${mapMode === val ? 'bg-white shadow-sm text-black' : 'text-gray-500 hover:text-black'}`}>{label}</button>
-                  ))}
-                </div>
-                <div className="flex gap-1 bg-gray-100 p-1 rounded border border-gray-200">
-                  {[['all', 'All Major'], ['violent', 'Violent'], ['property', 'Property']].map(([val, label]) => (
-                    <button key={val} onClick={() => setMapCrime(val)} className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-sm transition-colors ${mapCrime === val ? 'bg-white shadow-sm text-black' : 'text-gray-500 hover:text-black'}`}>{label}</button>
-                  ))}
-                  <select value={['all', 'violent', 'property'].includes(mapCrime) ? '' : mapCrime} onChange={e => e.target.value && setMapCrime(e.target.value)} className="text-[10px] font-black uppercase tracking-widest bg-transparent border-none focus:outline-none text-gray-500 cursor-pointer pl-2">
-                    <option value="">Crime...</option>
-                    {['Murder', 'Rape', 'Robbery', 'Fel. Assault', 'Burglary', 'Gr. Larceny', 'G.L.A.', 'Petit Larceny', 'Misd. Assault'].map(c => (
-                      <option key={c} value={c}>{c}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-            </div>
-            <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
-              <div className="lg:col-span-3">
-                <PrecinctMap precinctRates={precinctRates} onSelect={setActiveGeo} activeGeo={activeGeo} mapMode={mapMode} />
-              </div>
-              <div className="lg:col-span-2">
-                <PrecinctRankingBars precinctRates={precinctRates} onSelect={setActiveGeo} mapMode={mapMode} />
-              </div>
-            </div>
-          </section>
-        )}
-
-        {activeGeo === 'citywide' && <CityComparisonWidget rtciData={rtciData} />}
-
-        {activeGeo === 'citywide' && <TransitCrimeBox rawData={rawData} />}
 
         <QueryBox
           parsedData={parsedData}
@@ -2032,7 +2007,51 @@ export default function App() {
             <div className="max-w-lg"><UnifiedMagnitudeChart data={parsedData.all} isTourist={isTouristPrecinct} citywideRates={parsedData.citywideRates} activeGeo={activeGeo} /></div>
             <div className="max-w-lg"><DivergingBarChart data={parsedData.all} /></div>
           </div>
-          
+
+          {/* Precinct Choropleth Map + Ranking Bars (citywide only) */}
+          {activeGeo === 'citywide' && (
+            <section className="mb-10 pt-8 border-t border-gray-200">
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-5 gap-4">
+                <div>
+                  <h2 className="text-[11px] font-black uppercase tracking-[0.15em] text-gray-400 mb-1">Geographic View</h2>
+                  <p className="text-sm text-gray-500 font-serif">{mapMode === 'change' ? 'Year-over-year percent change by precinct.' : mapMode === 'volume' ? 'Absolute change in incident count vs prior year — where the raw numbers are growing or shrinking the most.' : 'Crime rates per 100k residents by precinct.'} Click any precinct to drill down.
+                    {hotspots?.inequality && <span className="ml-1 text-gray-400">The {hotspots.inequality.topCount} highest-crime precincts ({formatPop(hotspots.inequality.topPop)} residents) match the violent crime total of the {hotspots.inequality.bottomCount} safest ({formatPop(hotspots.inequality.bottomPop)} residents).</span>}
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center gap-3">
+                  <div className="flex gap-1 bg-gray-100 p-1 rounded border border-gray-200">
+                    {[['rate', 'Rate'], ['change', '% Change'], ['volume', 'Volume Δ']].map(([val, label]) => (
+                      <button key={val} onClick={() => setMapMode(val)} className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-sm transition-colors ${mapMode === val ? 'bg-white shadow-sm text-black' : 'text-gray-500 hover:text-black'}`}>{label}</button>
+                    ))}
+                  </div>
+                  <div className="flex gap-1 bg-gray-100 p-1 rounded border border-gray-200">
+                    {[['all', 'All Major'], ['violent', 'Violent'], ['property', 'Property']].map(([val, label]) => (
+                      <button key={val} onClick={() => setMapCrime(val)} className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-sm transition-colors ${mapCrime === val ? 'bg-white shadow-sm text-black' : 'text-gray-500 hover:text-black'}`}>{label}</button>
+                    ))}
+                    <select value={['all', 'violent', 'property'].includes(mapCrime) ? '' : mapCrime} onChange={e => e.target.value && setMapCrime(e.target.value)} className="text-[10px] font-black uppercase tracking-widest bg-transparent border-none focus:outline-none text-gray-500 cursor-pointer pl-2">
+                      <option value="">Crime...</option>
+                      {['Murder', 'Rape', 'Robbery', 'Fel. Assault', 'Burglary', 'Gr. Larceny', 'G.L.A.', 'Petit Larceny', 'Misd. Assault'].map(c => (
+                        <option key={c} value={c}>{c}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
+                <div className="lg:col-span-3">
+                  <PrecinctMap precinctRates={precinctRates} onSelect={setActiveGeo} activeGeo={activeGeo} mapMode={mapMode} />
+                </div>
+                <div className="lg:col-span-2">
+                  <PrecinctRankingBars precinctRates={precinctRates} onSelect={setActiveGeo} mapMode={mapMode} />
+                </div>
+              </div>
+            </section>
+          )}
+
+          {activeGeo === 'citywide' && <CityComparisonWidget rtciData={rtciData} />}
+
+          {activeGeo === 'citywide' && <TransitCrimeBox rawData={rawData} />}
+
           <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-6 border-b-2 border-black pb-4 gap-4">
             <h3 className="text-[14px] font-black uppercase tracking-[0.15em] text-black">{trendFilter === 'all' ? 'Detailed Data Ledger' : trendFilter === 'up' ? 'Rising Offenses' : 'Falling Offenses'}</h3>
             <div className="flex bg-gray-100 p-1 rounded border border-gray-200 w-full md:w-auto">
