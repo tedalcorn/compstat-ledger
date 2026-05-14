@@ -1019,14 +1019,16 @@ const PrecinctMap = ({ precinctRates, onSelect, activeGeo, mapMode = 'rate', wid
       <svg ref={svgRef} viewBox={`0 0 ${width} ${height}`} className="w-full h-auto" onMouseMove={handleMouse}>
         <defs>
           <pattern id="tourist-hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
-            <line x1="0" y1="0" x2="0" y2="6" stroke="#999" strokeWidth="1.5" />
+            <line x1="0" y1="0" x2="0" y2="6" stroke="#1f2937" strokeOpacity="0.5" strokeWidth="1" />
           </pattern>
         </defs>
         {precinctGeoJSON.features.map(feature => {
           const pNum = feature.properties.precinct;
           const pData = rateMap[pNum];
-          const fill = pData?.isTourist ? '#e5e5e5'
-            : mapMode === 'change' ? changeColor(pData?.pctChange, maxAbsChange)
+          // Tourist precincts now show their actual color; the hatch overlay flags them visually
+          // and the tooltip notes that rate is distorted by visitor population. % change and
+          // volume delta are NOT distorted by daytime population, so include them in rankings.
+          const fill = mapMode === 'change' ? changeColor(pData?.pctChange, maxAbsChange)
             : mapMode === 'volume' ? changeColor(pData?.countDelta, maxAbsDelta)
             : crimeColor(pData?.rate, minRate, maxRate);
           return (
@@ -1056,24 +1058,26 @@ const PrecinctMap = ({ precinctRates, onSelect, activeGeo, mapMode = 'rate', wid
             className="absolute pointer-events-none bg-white border border-gray-200 shadow-xl rounded p-3 z-50 text-[11px]"
             style={{ left: Math.min(mousePos.x + 12, width - 220), top: mousePos.y - 10, minWidth: 200 }}
           >
-            <div className="font-black text-black text-[12px] mb-0.5">{hoveredData.precinct}</div>
+            <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
+              <span className="font-black text-black text-[12px]">{hoveredData.precinct}</span>
+              {hoveredData.isTourist && <span className="text-[8px] font-bold uppercase tracking-wide px-1 py-[1px] rounded-sm bg-gray-800 text-white">Tourist hub</span>}
+            </div>
             {PRECINCT_NEIGHBORHOODS[hoveredData.precinct] && <div className="text-gray-500 mb-2">{PRECINCT_NEIGHBORHOODS[hoveredData.precinct]}</div>}
-            {hoveredData.isTourist ? (
-              <div className="text-gray-500 italic">Tourist/commercial hub — rates not comparable</div>
-            ) : (
-              <>
-                <div className="font-bold text-black">{hoveredData.count.toLocaleString()} incidents</div>
-                {hoveredData.rate != null && <div className="text-gray-600">{hoveredData.rate.toFixed(1)} per 100k{rankInfo ? ` · Rank ${rankInfo.rank} of ${rankInfo.total}` : ''}</div>}
-                {hoveredData.countDelta != null && (
-                  <div className="font-medium mt-1" style={{ color: hoveredData.countDelta > 0 ? '#c0392b' : hoveredData.countDelta < 0 ? '#27ae60' : '#333' }}>
-                    {hoveredData.countDelta > 0 ? '+' : ''}{hoveredData.countDelta.toLocaleString()} incidents vs last year
-                    {hoveredData.pctChange != null && <span className="text-gray-500 font-normal"> ({hoveredData.pctChange > 0 ? '+' : ''}{hoveredData.pctChange.toFixed(1)}%)</span>}
-                  </div>
-                )}
-                {hoveredData.priorCount != null && <div className="text-gray-400 text-[10px]">{hoveredData.priorCount.toLocaleString()} prior year</div>}
-                {pop && <div className="text-gray-400 mt-1">Pop. {pop.toLocaleString()}</div>}
-              </>
+            <div className="font-bold text-black">{hoveredData.count.toLocaleString()} incidents</div>
+            {hoveredData.rate != null && (
+              <div className="text-gray-600">
+                {hoveredData.rate.toFixed(1)} per 100k
+                {hoveredData.isTourist ? <span className="text-gray-400 italic"> (residents only — not comparable)</span> : rankInfo ? ` · Rank ${rankInfo.rank} of ${rankInfo.total}` : ''}
+              </div>
             )}
+            {hoveredData.countDelta != null && (
+              <div className="font-medium mt-1" style={{ color: hoveredData.countDelta > 0 ? '#c0392b' : hoveredData.countDelta < 0 ? '#27ae60' : '#333' }}>
+                {hoveredData.countDelta > 0 ? '+' : ''}{hoveredData.countDelta.toLocaleString()} incidents vs last year
+                {hoveredData.pctChange != null && <span className="text-gray-500 font-normal"> ({hoveredData.pctChange > 0 ? '+' : ''}{hoveredData.pctChange.toFixed(1)}%)</span>}
+              </div>
+            )}
+            {hoveredData.priorCount != null && <div className="text-gray-400 text-[10px]">{hoveredData.priorCount.toLocaleString()} prior year</div>}
+            {pop && <div className="text-gray-400 mt-1">Pop. {pop.toLocaleString()}{hoveredData.isTourist && <span className="italic"> · residents only</span>}</div>}
           </div>
         );
       })()}
@@ -1092,9 +1096,9 @@ const PrecinctMap = ({ precinctRates, onSelect, activeGeo, mapMode = 'rate', wid
             <span>High</span>
           </>
         )}
-        <span className="ml-3 pl-3 border-l border-gray-300 flex items-center gap-1">
-          <span className="inline-block w-3 h-3 bg-gray-200" style={{ backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 2px, #999 2px, #999 3px)' }} />
-          Tourist
+        <span className="ml-3 pl-3 border-l border-gray-300 flex items-center gap-1" title="Tourist/commercial precincts: per-100k rates use residential population only and are not comparable. % change and volume Δ are not distorted.">
+          <span className="inline-block w-3 h-3" style={{ backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 2px, rgba(31,41,55,0.5) 2px, rgba(31,41,55,0.5) 3px)' }} />
+          Tourist hub {mapMode === 'rate' && <span className="italic text-gray-400">(rate distorted)</span>}
         </span>
       </div>
     </div>
@@ -1106,12 +1110,15 @@ const PrecinctMap = ({ precinctRates, onSelect, activeGeo, mapMode = 'rate', wid
 /* ------------------------------------------------------------------ */
 const PrecinctRankingBars = ({ precinctRates, onSelect, mapMode = 'rate' }) => {
   const { top5, bottom5 } = useMemo(() => {
+    // Tourist precincts (Times Square / Midtown South) have distorted per-capita rates
+    // but their % change and volume Δ are not distorted by daytime population, so we include
+    // them in change/volume rankings and only exclude them from the rate-mode ranking.
     if (mapMode === 'change') {
-      const valid = precinctRates.filter(p => p.pctChange != null && !p.isTourist && p.priorCount > 5).sort((a, b) => b.pctChange - a.pctChange);
+      const valid = precinctRates.filter(p => p.pctChange != null && p.priorCount > 5).sort((a, b) => b.pctChange - a.pctChange);
       return { top5: valid.slice(0, 5), bottom5: valid.slice(-5).reverse() };
     }
     if (mapMode === 'volume') {
-      const valid = precinctRates.filter(p => p.count != null && p.priorCount != null && !p.isTourist)
+      const valid = precinctRates.filter(p => p.count != null && p.priorCount != null)
         .map(p => ({ ...p, countDelta: p.count - p.priorCount }))
         .sort((a, b) => b.countDelta - a.countDelta);
       return { top5: valid.slice(0, 5), bottom5: valid.slice(-5).reverse() };
@@ -1132,7 +1139,10 @@ const PrecinctRankingBars = ({ precinctRates, onSelect, mapMode = 'rate' }) => {
       : item.rate.toFixed(0);
     return (
       <div key={item.precinct} className="flex items-center gap-2 py-1 cursor-pointer hover:bg-gray-50 -mx-2 px-2 rounded transition-colors" onClick={() => onSelect(item.precinct)}>
-        <span className="text-[11px] font-bold text-gray-800 w-28 truncate flex-shrink-0" title={item.precinct}>{label}</span>
+        <span className="text-[11px] font-bold text-gray-800 w-28 truncate flex-shrink-0 flex items-center gap-1" title={item.precinct}>
+          {label}
+          {item.isTourist && <span className="text-[7px] font-black uppercase tracking-wide px-1 rounded-sm bg-gray-800 text-white" title="Tourist hub — visitor population inflates totals">T</span>}
+        </span>
         <div className="flex-1 flex items-center gap-2">
           <div className="h-4 rounded-sm" style={{ width: `${(barW / maxW) * 100}%`, minWidth: 4, background: color }} />
           <span className="text-[11px] font-bold tabular-nums" style={{ color }}>{displayVal}</span>
