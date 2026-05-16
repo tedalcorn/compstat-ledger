@@ -264,6 +264,36 @@ const calcPct = (current, prior) => {
   return ((c - p) / p) * 100;
 };
 const formatPct = (v) => (typeof v !== 'number' || Number.isNaN(v)) ? "—" : `${v > 0 ? "+" : ""}${v.toFixed(1)}%`;
+// Expand compact CompStat crime labels to friendlier names for prose.
+const EXPANDED_CRIME_NAMES = {
+  'G.L.A.': 'grand larceny auto',
+  'Gr. Larceny': 'grand larceny',
+  'Fel. Assault': 'felony assault',
+  'Misd. Assault': 'misdemeanor assault',
+  'Shooting Vic.': 'shooting victims',
+  'Shooting Inc.': 'shooting incidents',
+  'UCR Rape*': 'UCR rape',
+  'Murder': 'murder',
+  'Burglary': 'burglary',
+  'Robbery': 'robbery',
+  'Rape': 'rape',
+  'Petit Larceny': 'petit larceny',
+  'Retail Theft': 'retail theft',
+  'Transit': 'transit',
+  'Housing': 'housing',
+  'Hate Crimes': 'hate crimes',
+  'Traffic Fatalities': 'traffic fatalities',
+  'Other Sex Crimes': 'other sex crimes',
+};
+const expandCrime = (name) => EXPANDED_CRIME_NAMES[name] || (name || '').toLowerCase();
+const expandCrimeTitle = (name) => {
+  const exp = expandCrime(name);
+  return exp.replace(/\b\w/g, c => c.toUpperCase());
+};
+// Person vs. property classification for color-blind redundant cue.
+const PERSON_OFFENSES = new Set(['Murder', 'Rape', 'Robbery', 'Fel. Assault', 'Misd. Assault', 'Shooting Vic.', 'Shooting Inc.', 'UCR Rape*', 'Other Sex Crimes', 'Hate Crimes']);
+const PROPERTY_OFFENSES = new Set(['Burglary', 'Gr. Larceny', 'G.L.A.', 'Petit Larceny', 'Retail Theft']);
+const offenseClass = (name) => PERSON_OFFENSES.has(name) ? 'Per' : PROPERTY_OFFENSES.has(name) ? 'Prop' : null;
 const formatPop = (n) => {
   if (!n) return '0';
   if (n >= 1000000) return (n / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
@@ -296,12 +326,11 @@ const buildStorySummary = ({ parsedData, hotspots, activeTab }) => {
   const pctAbs = Math.abs(mPct).toFixed(1);
   const mCur = totals.mCur?.toLocaleString() ?? '—';
 
-  let sentence1;
+  // Hero already shows the aggregate metric prominently; lead with local color, not duplicated topline.
+  let sentence1 = null;
   if (driver && driver.name && Math.abs(driver.share) >= 5) {
     const shareStr = `${Math.round(Math.abs(driver.share))}%`;
-    sentence1 = `${timeframe}, major index offenses are ${upDown} ${pctAbs}% versus the same period last year (${mCur} total), with ${driver.name.toLowerCase()} accounting for ${shareStr} of the ${direction}.`;
-  } else {
-    sentence1 = `${timeframe}, major index offenses are ${upDown} ${pctAbs}% versus the same period last year (${mCur} total).`;
+    sentence1 = `${timeframe}, ${expandCrime(driver.name)} accounts for ${shareStr} of the citywide ${direction}.`;
   }
 
   let sentence2 = null;
@@ -311,9 +340,9 @@ const buildStorySummary = ({ parsedData, hotspots, activeTab }) => {
   const shootings = totals.shootingVic;
 
   if (spike && typeof spike.pct === 'number' && spike.pct >= 25) {
-    sentence2 = `The sharpest local shift was ${spike.crime.toLowerCase()} in the ${toOrdinalPrecinct(spike.precinct)}, up ${spike.pct.toFixed(0)}%.`;
+    sentence2 = `The sharpest local shift was ${expandCrime(spike.crime)} in the ${toOrdinalPrecinct(spike.precinct)}, up ${Math.round(spike.pct)}%.`;
   } else if (drop && typeof drop.pct === 'number' && drop.pct <= -25) {
-    sentence2 = `The sharpest local shift was ${drop.crime.toLowerCase()} in the ${toOrdinalPrecinct(drop.precinct)}, down ${Math.abs(drop.pct).toFixed(0)}%.`;
+    sentence2 = `The sharpest local shift was ${expandCrime(drop.crime)} in the ${toOrdinalPrecinct(drop.precinct)}, down ${Math.round(Math.abs(drop.pct))}%.`;
   } else if (typeof murder === 'number' && typeof shootings === 'number' && (murder > 0 || shootings > 0)) {
     sentence2 = `Murder stands at ${murder.toLocaleString()} and shooting victims at ${shootings.toLocaleString()} for the period.`;
   } else if (hotspots?.inequality) {
@@ -321,7 +350,12 @@ const buildStorySummary = ({ parsedData, hotspots, activeTab }) => {
     sentence2 = `The ${ineq.topCount} highest-crime precincts (${formatPop(ineq.topPop)} residents) match the violent crime total of the ${ineq.bottomCount} safest (${formatPop(ineq.bottomPop)} residents).`;
   }
 
-  return sentence2 ? `${sentence1} ${sentence2}` : sentence1;
+  // If we have no local color at all, fall back to a single sentence using the topline so the section isn't empty.
+  if (!sentence1 && !sentence2) {
+    sentence1 = `${timeframe}, major index offenses are ${upDown} ${pctAbs}% versus the same period last year (${mCur} total).`;
+  }
+
+  return [sentence1, sentence2].filter(Boolean).join(' ');
 };
 
 const toOrdinalPrecinct = (n) => {
@@ -1444,6 +1478,19 @@ export default function App() {
     };
   }, [rawData, activeTab, activeGeo]);
 
+  // Dynamic <title> so browser tabs and social previews carry the latest reporting period.
+  useEffect(() => {
+    if (parsedData?.period?.week_end) {
+      const fmt = (s) => {
+        try { return new Date(s).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); }
+        catch { return s; }
+      };
+      const start = parsedData.period.week_start ? fmt(parsedData.period.week_start) : null;
+      const end = fmt(parsedData.period.week_end);
+      document.title = start ? `CompStat in Context · Week of ${start}–${end}` : `CompStat in Context · Through ${end}`;
+    }
+  }, [parsedData.period?.week_end, parsedData.period?.week_start]);
+
   const hotspots = useMemo(() => {
     const keys = Object.keys(rawData).filter(k => k !== 'citywide' && k.includes('Precinct'));
     let volumes = [], allPrecinctCrimes = [];
@@ -1505,9 +1552,10 @@ export default function App() {
     const { driver, localAnomaly, localBrightSpot, topSurge, topDrop, totals } = parsedData;
     if (activeGeo === 'citywide') {
       if (driver) {
+        const dName = expandCrimeTitle(driver.name);
         const driverShareText = driver.diff > 0
-          ? `The overall surge was largely driven by **${driver.name}** index offenses, which account for **${driver.share.toFixed(0)}%** of the total citywide upward shift.`
-          : `Nearly **${driver.share.toFixed(0)}%** of the total citywide drop in major index offenses can be attributed to **${driver.name}**, which saw **${Math.abs(driver.diff).toLocaleString()} fewer cases** than last year.`;
+          ? `The overall surge was largely driven by **${dName}** index offenses, which account for **${Math.round(driver.share)}%** of the total citywide upward shift.`
+          : `Nearly **${Math.round(driver.share)}%** of the total citywide drop in major index offenses can be attributed to **${dName}**, which saw **${Math.abs(driver.diff).toLocaleString()} fewer cases** than last year.`;
         const shareW = Math.min(100, driver.share);
         cards.push({ id: 'driver', icon: Target, title: 'Primary Driver', content: driverShareText,
           dataViz: (
@@ -1526,31 +1574,35 @@ export default function App() {
       if (hotspots?.topPctSpike || hotspots?.topPctDrop) {
         const flashContent = (
           <ul className="space-y-3 mt-1 text-[14px]">
-            {hotspots.topPctSpike && <li>{`In **${formatGeoName(hotspots.topPctSpike.precinct)}**, **${hotspots.topPctSpike.crime}** offenses have spiked by **${hotspots.topPctSpike.pct.toFixed(1)}%**.`}</li>}
-            {hotspots.topPctDrop && <li className="pt-2 border-t border-gray-100">{`In **${formatGeoName(hotspots.topPctDrop.precinct)}**, **${hotspots.topPctDrop.crime}** offenses have fallen by **${Math.abs(hotspots.topPctDrop.pct).toFixed(1)}%**.`}</li>}
+            {hotspots.topPctSpike && <li>{`In **${formatGeoName(hotspots.topPctSpike.precinct)}**, **${expandCrimeTitle(hotspots.topPctSpike.crime)}** offenses have spiked by **${Math.round(hotspots.topPctSpike.pct)}%**.`}</li>}
+            {hotspots.topPctDrop && <li className="pt-2 border-t border-gray-100">{`In **${formatGeoName(hotspots.topPctDrop.precinct)}**, **${expandCrimeTitle(hotspots.topPctDrop.crime)}** offenses have fallen by **${Math.round(Math.abs(hotspots.topPctDrop.pct))}%**.`}</li>}
           </ul>
         );
         cards.push({ id: 'flashpoints', icon: MapPin, title: 'Significant Local Shifts', content: flashContent });
       }
       const lethalDots = Math.round(totals.lethalityRatio);
-      cards.push({ id: 'lethality', icon: AlertCircle, title: 'The Lethality Gap', content: `For every **1 homicide**, there were **${totals.lethalityRatio.toFixed(1)} shooting victims**. (A widening gap often points to improved trauma care rather than fewer street shootings).`,
+      // Lead with the trauma-care insight, then the numbers. The interpretation is the story.
+      cards.push({ id: 'lethality', icon: AlertCircle, title: 'The Lethality Gap', content: `A widening gap between shootings and homicides often points to improved trauma care rather than fewer street shootings. For every **1 homicide** this period, there were **${totals.lethalityRatio.toFixed(1)} shooting victims** — a ratio of **1 : ${totals.lethalityRatio.toFixed(1)}**.`,
         dataViz: (
-          <div className="mt-3 flex items-center gap-1.5">
-            <div className="w-3 h-3 rounded-full bg-gray-900 flex-shrink-0" title="1 homicide" />
-            <span className="text-[10px] font-bold text-gray-400 mx-0.5">:</span>
-            {Array.from({ length: lethalDots }).map((_, i) => (
-              <div key={i} className="w-3 h-3 rounded-full flex-shrink-0" style={{ background: VC.orange, opacity: 0.7 + (i / lethalDots) * 0.3 }} title="shooting victim" />
-            ))}
-            {totals.lethalityRatio % 1 > 0.3 && <div className="w-3 h-3 rounded-full flex-shrink-0 opacity-40" style={{ background: VC.orange }} />}
+          <div className="mt-3">
+            <div className="flex items-center gap-1.5 mb-1">
+              <div className="w-3 h-3 rounded-full bg-gray-900 flex-shrink-0" title="1 homicide" />
+              <span className="text-[10px] font-bold text-gray-400 mx-0.5">:</span>
+              {Array.from({ length: lethalDots }).map((_, i) => (
+                <div key={i} className="w-3 h-3 rounded-full flex-shrink-0" style={{ background: VC.orange, opacity: 0.7 + (i / lethalDots) * 0.3 }} title="shooting victim" />
+              ))}
+              {totals.lethalityRatio % 1 > 0.3 && <div className="w-3 h-3 rounded-full flex-shrink-0 opacity-40" style={{ background: VC.orange }} />}
+            </div>
+            <div className="text-[10px] text-gray-400 italic">Shooting victims per homicide</div>
           </div>
         )
       });
     } else {
-      if (driver && driver.share >= 25) cards.push({ id: 'local_driver', icon: Target, title: 'Local Driver', content: `The change in **${driver.name}** volume accounts for **${driver.share.toFixed(0)}%** of this area's trajectory.` });
-      if (localAnomaly && !isTouristPrecinct) cards.push({ id: 'anomaly', icon: AlertTriangle, title: 'Elevated Local Risk', content: `The rate for **${localAnomaly.name}** here is **${localAnomaly.localRate.toFixed(1)} per 100k residents**, which is **${localAnomaly.ratio.toFixed(1)}x** higher than the citywide average (${localAnomaly.cityRate.toFixed(1)}).` });
-      else if (topSurge && topSurge.pct > 0) cards.push({ id: 'surge', icon: TrendingUp, title: 'Local Trajectory', content: `**${topSurge.name}** index offenses have increased by **${topSurge.pct.toFixed(1)}%** compared to last year.` });
-      if (localBrightSpot && !isTouristPrecinct) cards.push({ id: 'brightspot', icon: ShieldCheck, title: 'Local Bright Spot', content: `The rate of **${localBrightSpot.name}** offenses here sits **${((1 - localBrightSpot.ratio)*100).toFixed(0)}% below** the citywide average.` });
-      else if (topDrop && topDrop.pct < 0) cards.push({ id: 'drop', icon: TrendingDown, title: 'Local Trajectory', content: `**${topDrop.name}** index offenses have fallen by **${Math.abs(topDrop.pct).toFixed(1)}%** here compared to last year.` });
+      if (driver && driver.share >= 25) cards.push({ id: 'local_driver', icon: Target, title: 'Local Driver', content: `The change in **${expandCrimeTitle(driver.name)}** volume accounts for **${Math.round(driver.share)}%** of this area's trajectory.` });
+      if (localAnomaly && !isTouristPrecinct) cards.push({ id: 'anomaly', icon: AlertTriangle, title: 'Elevated Local Risk', content: `The rate for **${expandCrimeTitle(localAnomaly.name)}** here is **${localAnomaly.localRate.toFixed(1)} per 100k residents**, which is **${localAnomaly.ratio.toFixed(1)}x** higher than the citywide average (${localAnomaly.cityRate.toFixed(1)}).` });
+      else if (topSurge && topSurge.pct > 0) cards.push({ id: 'surge', icon: TrendingUp, title: 'Local Trajectory', content: `**${expandCrimeTitle(topSurge.name)}** index offenses have increased by **${Math.round(topSurge.pct)}%** compared to last year.` });
+      if (localBrightSpot && !isTouristPrecinct) cards.push({ id: 'brightspot', icon: ShieldCheck, title: 'Local Bright Spot', content: `The rate of **${expandCrimeTitle(localBrightSpot.name)}** offenses here sits **${Math.round((1 - localBrightSpot.ratio)*100)}% below** the citywide average.` });
+      else if (topDrop && topDrop.pct < 0) cards.push({ id: 'drop', icon: TrendingDown, title: 'Local Trajectory', content: `**${expandCrimeTitle(topDrop.name)}** index offenses have fallen by **${Math.round(Math.abs(topDrop.pct))}%** here compared to last year.` });
     }
     return cards;
   };
@@ -1757,10 +1809,10 @@ export default function App() {
             <span className="text-[11px] font-black uppercase tracking-widest text-black">NYPD CompStat Ledger</span>
             <span className="text-gray-300">•</span>
             <span className="text-[12px] font-medium text-gray-500 tabular-nums">{parsedData.period?.week_start || 'N/A'} – {parsedData.period?.week_end || 'N/A'}</span>
-            <button onClick={loadReport} className="ml-2 text-gray-400 hover:text-black transition-colors"><RefreshCw size={14} className={loading ? "animate-spin" : ""} /></button>
+            <button onClick={loadReport} title="Refresh data from NYPD" aria-label="Refresh data" className="ml-2 text-gray-400 hover:text-black transition-colors"><RefreshCw size={14} className={loading ? "animate-spin" : ""} /></button>
             {fetchError && <span className="text-[10px] font-medium text-gray-400 uppercase tracking-widest">Using embedded data</span>}
             <div className="relative ml-1">
-              <button onClick={() => setShowHelp(!showHelp)} className={`text-gray-400 hover:text-black transition-colors ${showHelp ? 'text-black' : ''}`}><Info size={14} /></button>
+              <button onClick={() => setShowHelp(!showHelp)} title="How to use this tool" aria-label="How to use this tool" className={`text-gray-400 hover:text-black transition-colors ${showHelp ? 'text-black' : ''}`}><Info size={14} /></button>
               {showHelp && <div className="absolute top-full left-0 mt-3 w-72 bg-white border border-gray-200 shadow-2xl rounded p-4 z-50">
                 <div className="flex justify-between mb-3"><h4 className="font-black text-black uppercase tracking-widest text-[10px]">How to use this tool</h4><button onClick={() => setShowHelp(false)} className="text-gray-400 hover:text-black font-bold px-2">&times;</button></div>
                 <ul className="space-y-3 text-[13px] text-gray-600 font-serif">
@@ -1820,13 +1872,13 @@ export default function App() {
                     </div>
                   )}
                 </div>
-                <button onClick={handleLocateUser} disabled={isLocating} title="Find my precinct" className="flex items-center justify-center px-3 border border-gray-300 rounded bg-white hover:bg-gray-50 disabled:opacity-50">{isLocating ? <RefreshCw size={14} className="animate-spin" /> : <Navigation size={14} />}</button>
+                <button onClick={handleLocateUser} disabled={isLocating} title="Use my location to find my NYPD precinct" aria-label="Find my precinct" className="flex items-center justify-center px-3 border border-gray-300 rounded bg-white hover:bg-gray-50 disabled:opacity-50">{isLocating ? <RefreshCw size={14} className="animate-spin" /> : <Navigation size={14} />}</button>
               </div>
               {locateMsg && <span className="absolute -bottom-5 left-0 text-[10px] font-bold uppercase tracking-widest text-indigo-600">{locateMsg}</span>}
             </div>
-            <div className="flex border border-black rounded overflow-hidden shrink-0">
-              <button onClick={() => setActiveTab('wtd')} className={`px-6 py-2 text-[10px] font-black uppercase tracking-widest ${activeTab === 'wtd' ? 'bg-black text-white' : 'bg-white'}`}>Weekly</button>
-              <button onClick={() => setActiveTab('ytd')} className={`px-6 py-2 text-[10px] font-black uppercase tracking-widest ${activeTab === 'ytd' ? 'bg-black text-white' : 'bg-white'}`}>Year to Date</button>
+            <div className="flex border border-gray-400 rounded overflow-hidden shrink-0">
+              <button onClick={() => setActiveTab('wtd')} aria-pressed={activeTab === 'wtd'} className={`px-6 py-2 text-[10px] font-black uppercase tracking-widest transition-colors ${activeTab === 'wtd' ? 'bg-gray-900 text-white' : 'bg-white text-gray-700 hover:bg-gray-50 underline-offset-2 underline decoration-dotted decoration-gray-300'}`}>Weekly</button>
+              <button onClick={() => setActiveTab('ytd')} aria-pressed={activeTab === 'ytd'} className={`px-6 py-2 text-[10px] font-black uppercase tracking-widest transition-colors ${activeTab === 'ytd' ? 'bg-gray-900 text-white' : 'bg-white text-gray-700 hover:bg-gray-50 underline-offset-2 underline decoration-dotted decoration-gray-300'}`}>Year to Date</button>
             </div>
           </div>
         </header>
@@ -1856,8 +1908,8 @@ export default function App() {
               <span className="text-5xl md:text-6xl font-black tabular-nums tracking-tighter leading-none relative">{parsedData.totals.mCur.toLocaleString()}</span>
               <div className="pb-1.5 flex flex-col">
                 <span className="text-sm font-medium text-gray-500 uppercase tracking-widest mb-1">Index Total</span>
-                <span className={`text-base font-bold tabular-nums ${parsedData.totals.mPct > 0 ? 'text-orange-600' : 'text-green-600'}`}>
-                  {parsedData.totals.mPct > 0 ? '+' : (parsedData.totals.mPct < 0 ? '-' : '')}{formattedMPct}% vs {parsedData.totals.mPri.toLocaleString()} last yr
+                <span className={`text-base font-bold tabular-nums ${parsedData.totals.mPct > 0 ? 'text-orange-600' : 'text-green-600'}`} aria-label={`${parsedData.totals.mPct > 0 ? 'Up' : 'Down'} ${formattedMPct} percent`}>
+                  <span aria-hidden="true">{parsedData.totals.mPct > 0 ? '▲' : (parsedData.totals.mPct < 0 ? '▼' : '•')}</span> {formattedMPct}% vs {parsedData.totals.mPri.toLocaleString()} last yr
                 </span>
               </div>
             </div>
@@ -1871,35 +1923,74 @@ export default function App() {
           </div>
         </section>
 
+        {/* Hero callouts: promoted insights that used to be buried in trend cards */}
         {activeGeo === 'citywide' && (() => {
           const story = buildStorySummary({ parsedData, hotspots, activeTab });
-          if (!story) return null;
+          const ineq = hotspots?.inequality;
+          const lethality = parsedData.totals.lethalityRatio;
+          const spike = hotspots?.topPctSpike;
           return (
-            <section className="mb-10 p-5 bg-gray-50 rounded-lg border border-gray-200">
-              <div className="flex items-center gap-2 mb-3">
-                <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">
-                  {activeTab === 'ytd' ? 'Year-to-date summary' : 'Story of the week'}
-                </span>
-                <span className="text-[10px] font-medium text-gray-500 tabular-nums">
-                  {activeTab === 'ytd'
-                    ? `Through ${parsedData.period?.week_end || '—'}`
-                    : `${parsedData.period?.week_start || '—'} – ${parsedData.period?.week_end || '—'}`}
-                </span>
-              </div>
-              <p className="font-serif text-[16px] leading-relaxed text-gray-800">{story}</p>
+            <section className="mb-10 grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* Story sentence — keeps the AI-style summary but no longer duplicates the hero number */}
+              {story && (
+                <div className="md:col-span-3 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-[9px] font-black uppercase tracking-widest text-gray-400">In context</span>
+                    <span className="text-[10px] font-medium text-gray-500 tabular-nums">
+                      {activeTab === 'ytd' ? `Through ${parsedData.period?.week_end || '—'}` : `${parsedData.period?.week_start || '—'} – ${parsedData.period?.week_end || '—'}`}
+                    </span>
+                  </div>
+                  <p className="font-serif text-[15px] leading-relaxed text-gray-800">{story}</p>
+                </div>
+              )}
+              {ineq && (
+                <div className="p-4 bg-white rounded-lg border border-gray-200">
+                  <div className="text-[9px] font-black uppercase tracking-widest text-gray-400 mb-2">Inequality</div>
+                  <div className="text-[28px] font-black tabular-nums text-black leading-none">{ineq.topCount} : {ineq.bottomCount}</div>
+                  <p className="text-[12px] text-gray-600 mt-2 leading-snug">The {ineq.topCount} highest-crime precincts ({formatPop(ineq.topPop)} residents) match the violent crime total of the {ineq.bottomCount} safest ({formatPop(ineq.bottomPop)} residents).</p>
+                </div>
+              )}
+              {typeof lethality === 'number' && lethality > 0 && (
+                <div className="p-4 bg-white rounded-lg border border-gray-200">
+                  <div className="text-[9px] font-black uppercase tracking-widest text-gray-400 mb-2">Lethality gap</div>
+                  <div className="text-[28px] font-black tabular-nums text-black leading-none">1 : {lethality.toFixed(1)}</div>
+                  <p className="text-[12px] text-gray-600 mt-2 leading-snug">Shooting victims per homicide. A widening ratio often reflects better trauma care, not fewer shootings.</p>
+                </div>
+              )}
+              {spike && typeof spike.pct === 'number' && spike.pct >= 25 && (
+                <div className="p-4 bg-white rounded-lg border border-gray-200">
+                  <div className="text-[9px] font-black uppercase tracking-widest text-gray-400 mb-2">Sharpest local spike</div>
+                  <div className="text-[28px] font-black tabular-nums text-orange-600 leading-none" aria-label={`Up ${Math.round(spike.pct)} percent`}><span aria-hidden="true">▲</span> {Math.round(spike.pct)}%</div>
+                  <p className="text-[12px] text-gray-600 mt-2 leading-snug">{expandCrimeTitle(spike.crime)} in the {toOrdinalPrecinct(spike.precinct)}.</p>
+                </div>
+              )}
             </section>
           );
         })()}
 
-        <div className="mb-6 flex items-center gap-2">
-          <button onClick={() => setAppView('historic')} className="text-[11px] font-black uppercase tracking-widest text-gray-400 hover:text-black transition-colors flex items-center gap-1.5">
-            <Activity size={12} /> Explore the 30-Year View →
-          </button>
-        </div>
+        {/* Sticky in-page section nav — orientation + deep-linking */}
+        <nav className="sticky top-0 z-30 bg-white/95 backdrop-blur border-y border-gray-200 -mx-5 sm:-mx-8 px-5 sm:px-8 mb-6 py-2 flex items-center gap-1 overflow-x-auto whitespace-nowrap" aria-label="Page sections">
+          <span className="text-[9px] font-black uppercase tracking-widest text-gray-400 mr-2 flex-shrink-0">Jump to:</span>
+          {[
+            ['trends', 'Trends'],
+            ['offenses', 'Offenses'],
+            ['geography', 'Geography'],
+            ['national', 'National'],
+            ['transit', 'Transit'],
+            ['ledger', 'Ledger'],
+          ].map(([id, label]) => (
+            <a key={id} href={`#${id}`} className="text-[10px] font-black uppercase tracking-widest text-gray-600 hover:text-black px-2 py-1 rounded hover:bg-gray-100 transition-colors flex-shrink-0">{label}</a>
+          ))}
+          <span className="ml-auto flex items-center gap-2 flex-shrink-0">
+            <button onClick={() => setAppView('historic')} className="text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-black transition-colors flex items-center gap-1.5">
+              <Activity size={12} /> 30-Year View →
+            </button>
+          </span>
+        </nav>
 
-        <section className="mb-8 pt-8 border-t border-gray-200">
+        <section id="trends" className="mb-8 pt-4 border-t border-gray-200 scroll-mt-16">
           <h2 className="text-[11px] font-black uppercase tracking-[0.15em] text-gray-400 mb-5">Trends to Watch</h2>
-          <div className={`grid grid-cols-1 md:grid-cols-2 ${trendCards.length === 4 ? 'lg:grid-cols-4' : 'lg:grid-cols-3'} gap-8`}>
+          <div className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8`}>
             {trendCards.map(card => {
               const IconComp = card.icon;
               return (
@@ -1913,7 +2004,7 @@ export default function App() {
           </div>
         </section>
 
-        <section className="mb-12 pt-8 border-t-[3px] border-black">
+        <section id="offenses" className="mb-12 pt-8 border-t-[3px] border-black scroll-mt-16">
           <div className="flex flex-col md:flex-row justify-between items-baseline mb-5">
             <h2 className="text-2xl font-black font-serif">All Tracked Offenses</h2>
             <span className="text-[11px] font-black uppercase tracking-widest text-gray-400 mt-2 md:mt-0">Ranked by Incident Volume</span>
@@ -1925,13 +2016,11 @@ export default function App() {
 
           {/* Precinct Choropleth Map + Ranking Bars (citywide only) */}
           {activeGeo === 'citywide' && (
-            <section className="mb-10 pt-8 border-t border-gray-200">
+            <section id="geography" className="mb-10 pt-8 border-t border-gray-200 scroll-mt-16">
               <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-5 gap-4">
                 <div>
                   <h2 className="text-[11px] font-black uppercase tracking-[0.15em] text-gray-400 mb-1">Geographic View</h2>
-                  <p className="text-sm text-gray-500 font-serif">{mapMode === 'change' ? 'Year-over-year percent change by precinct.' : mapMode === 'volume' ? 'Absolute change in incident count vs prior year — where the raw numbers are growing or shrinking the most.' : 'Crime rates per 100k residents by precinct.'} Click any precinct to drill down.
-                    {hotspots?.inequality && <span className="ml-1 text-gray-400">The {hotspots.inequality.topCount} highest-crime precincts ({formatPop(hotspots.inequality.topPop)} residents) match the violent crime total of the {hotspots.inequality.bottomCount} safest ({formatPop(hotspots.inequality.bottomPop)} residents).</span>}
-                  </p>
+                  <p className="text-sm text-gray-500 font-serif">{mapMode === 'change' ? 'Year-over-year percent change by precinct.' : mapMode === 'volume' ? 'Absolute change in incident count vs prior year — where the raw numbers are growing or shrinking the most.' : 'Crime rates per 100k residents by precinct.'} Click any precinct to drill down.</p>
                 </div>
                 <div className="flex flex-wrap items-center gap-3">
                   <div className="flex gap-1 bg-gray-100 p-1 rounded border border-gray-200">
@@ -1963,11 +2052,11 @@ export default function App() {
             </section>
           )}
 
-          {activeGeo === 'citywide' && <CityComparisonWidget rtciData={rtciData} />}
+          {activeGeo === 'citywide' && <div id="national" className="scroll-mt-16"><CityComparisonWidget rtciData={rtciData} /></div>}
 
-          {activeGeo === 'citywide' && <TransitCrimeBox rawData={rawData} />}
+          {activeGeo === 'citywide' && <div id="transit" className="scroll-mt-16"><TransitCrimeBox rawData={rawData} /></div>}
 
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-6 border-b-2 border-black pb-4 gap-4">
+          <div id="ledger" className="flex flex-col md:flex-row justify-between items-start md:items-end mb-6 border-b-2 border-black pb-4 gap-4 scroll-mt-16">
             <h3 className="text-[14px] font-black uppercase tracking-[0.15em] text-black">{trendFilter === 'all' ? 'Detailed Data Ledger' : trendFilter === 'up' ? 'Rising Offenses' : 'Falling Offenses'}</h3>
             <div className="flex bg-gray-100 p-1 rounded border border-gray-200 w-full md:w-auto">
               <button onClick={() => setTrendFilter('all')} className={`flex-1 md:flex-none px-4 py-1.5 text-[10px] font-black uppercase ${trendFilter === 'all' ? 'bg-white shadow-sm' : 'text-gray-500'}`}>All</button>
@@ -2004,7 +2093,12 @@ export default function App() {
                       <tr key={item.name} className="hover:bg-gray-50 transition-colors group">
                         <td className="py-2.5 font-bold text-sm text-black">
                           <div className="flex items-center gap-2 flex-wrap">
-                            <span>{item.name}{isVolatile && <span className="ml-1 text-gray-400">*</span>}</span>
+                            {offenseClass(item.name) && (
+                              <span className={`text-[8px] font-black uppercase tracking-wide px-1 py-[1px] rounded-sm ${offenseClass(item.name) === 'Per' ? 'bg-pink-100 text-pink-700' : 'bg-indigo-100 text-indigo-700'}`} title={offenseClass(item.name) === 'Per' ? 'Person crime' : 'Property crime'}>
+                                {offenseClass(item.name) === 'Per' ? '● Per' : '■ Prop'}
+                              </span>
+                            )}
+                            <span title={expandCrimeTitle(item.name)}>{item.name}{isVolatile && <span className="ml-1 text-gray-400">*</span>}</span>
                             {primaryBadge && (
                               <span className={`text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded border ${toneClass(primaryBadge.tone)}`} title={ctx?.pandemicBadge?.label && ctx.pandemicBadge !== primaryBadge ? `${primaryBadge.label} · ${ctx.pandemicBadge.label}` : primaryBadge.label}>
                                 {primaryBadge.label}
@@ -2030,11 +2124,12 @@ export default function App() {
                           )}
                         </td>
                         <td className={`py-2.5 text-right text-xs font-bold tabular-nums ${item.pct > 0 ? 'text-orange-600' : 'text-green-600'}`}>
-                          <div className="flex items-center justify-end gap-1.5">
+                          <div className="flex items-center justify-end gap-1.5" aria-label={`${item.pct > 0 ? 'Up' : 'Down'} ${Math.abs(item.pct ?? 0).toFixed(1)} percent`}>
                             <div className="w-12 h-[3px] bg-gray-100 rounded-full overflow-hidden flex" style={{ justifyContent: item.pct > 0 ? 'flex-start' : 'flex-end' }}>
                               <div className="h-full rounded-full" style={{ width: `${changeBarW}px`, background: item.pct > 0 ? VC.orange : VC.green }} />
                             </div>
-                            <span>{formatPct(item.pct)}</span>
+                            <span aria-hidden="true">{item.pct > 0 ? '▲' : item.pct < 0 ? '▼' : '•'}</span>
+                            <span>{formatPct(item.pct).replace(/^[+−-]/, '')}</span>
                           </div>
                         </td>
                       </tr>
@@ -2049,6 +2144,41 @@ export default function App() {
             <div>Trajectory shows the offense's annual citywide count back to the early 2010s. The blue band marks the 2017–2019 pre-pandemic range — values inside the band have returned to pre-pandemic norms; values below are below pre-pandemic lows. Dot = current year, projected to a full-year equivalent from year-to-date data. Badges call out where each offense sits relative to that historical context (e.g., "Lowest since 2014," "Above pre-pandemic high," "5-yr high outlier"). Pandemic-context badges only appear for the 10 major offenses tracked in our 30-year history.</div>
           </div>
         </section>
+
+        {/* Methodology / About footer */}
+        <footer className="mt-16 pt-8 border-t border-gray-200 text-[12px] text-gray-600 grid grid-cols-1 md:grid-cols-3 gap-8">
+          <div>
+            <h3 className="text-[10px] font-black uppercase tracking-widest text-gray-500 mb-3">Data sources</h3>
+            <ul className="space-y-1 leading-snug">
+              <li>NYPD CompStat 2.0 weekly report (scraped from <a href="https://compstat.nypdonline.org/" className="underline hover:text-black" target="_blank" rel="noopener noreferrer">compstat.nypdonline.org</a>)</li>
+              <li>NYC Open Data — NYPD Complaint Data Historic (<code className="text-[10px]">qgea-i56i</code>) &amp; Current YTD (<code className="text-[10px]">5uac-w243</code>)</li>
+              <li>NYPD historical annual indices, 1993–present (NYPD Historical NYC Crime Data)</li>
+              <li>U.S. Census ACS population estimates for per-100k rate calculations</li>
+              <li>Real-Time Crime Index by AH Datalytics for peer-city comparison</li>
+            </ul>
+          </div>
+          <div>
+            <h3 className="text-[10px] font-black uppercase tracking-widest text-gray-500 mb-3">Methodology notes</h3>
+            <ul className="space-y-1 leading-snug">
+              <li>"Year-to-date" follows NYPD's CompStat week ending on Sunday — same-period prior-year comparison.</li>
+              <li>"Tourist hubs" (14th, 18th, 22nd precincts) have residential populations far below daytime populations, so per-100k rates are flagged with a hatch overlay. % change and volume Δ are unaffected.</li>
+              <li>Pre-pandemic baseline = mean and range of 2017–2019 annual citywide totals.</li>
+              <li>Current-year sparkline dot uses an annualized projection: <code className="text-[10px]">current_ytd / (prior_year_ytd / prior_year_full)</code>.</li>
+              <li>Outlier badges use z-score against the prior-5-year baseline; |z| ≥ 2 triggers a flag.</li>
+              <li>"Significant" YoY shifts at the precinct level filter for a base of at least 5 incidents in the prior period to avoid volatile small-sample noise.</li>
+            </ul>
+          </div>
+          <div>
+            <h3 className="text-[10px] font-black uppercase tracking-widest text-gray-500 mb-3">About</h3>
+            <p className="leading-snug mb-3">
+              Published by <a href="https://vitalcitynyc.org/" className="underline hover:text-black" target="_blank" rel="noopener noreferrer">Vital City</a>, an independent New York policy journal. The project is open source; data refreshes every Monday after NYPD posts the new CompStat report.
+            </p>
+            <p className="leading-snug text-gray-500">
+              CompStat data through {parsedData.period?.week_end || '—'}. Page rendered {new Date().toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}.
+            </p>
+            <p className="mt-3"><a href="https://github.com/joshgreenman1973/compstat-ledger" className="underline hover:text-black" target="_blank" rel="noopener noreferrer">View source on GitHub →</a></p>
+          </div>
+        </footer>
       </div>
     </div>
   );
