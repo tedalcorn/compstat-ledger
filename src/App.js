@@ -643,7 +643,8 @@ const ContextSparkline = ({ series, annualized, preLow, preHigh, width = 80, hei
 
   // History points (excludes current year — current is rendered separately as the "annualized" dot)
   const histPoints = series.map((d, i) => `${xFor(i, series.length).toFixed(1)},${yFor(d.val).toFixed(1)}`).join(' ');
-  const cx = xFor(series.length - 1, series.length) + (width - pad * 2) * 0.06; // current sits slightly right of last historical point
+  // Current-year dot sits just right of the last historical point, clamped so the halo never clips the edge.
+  const cx = Math.min(width - 5, xFor(series.length - 1, series.length) + (width - pad * 2) * 0.06);
   const cy = yFor(annualized);
   const trending = annualized > series[series.length - 1].val;
 
@@ -653,7 +654,15 @@ const ContextSparkline = ({ series, annualized, preLow, preHigh, width = 80, hei
         <rect x={pad} y={yFor(preHigh)} width={width - pad * 2} height={Math.max(1, yFor(preLow) - yFor(preHigh))} fill="#dbeafe" fillOpacity="0.55" />
       )}
       <polyline points={histPoints} fill="none" stroke="#9ca3af" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round" />
-      <circle cx={cx} cy={cy} r="2.5" fill={trending ? VC.orange : VC.green} />
+      {/* Connector from last historical point to the current-year dot */}
+      <line
+        x1={xFor(series.length - 1, series.length)} y1={yFor(series[series.length - 1].val)}
+        x2={cx} y2={cy}
+        stroke={trending ? VC.orange : VC.green} strokeWidth="1.25" strokeLinecap="round"
+      />
+      {/* White halo so the dot always reads against the gray line */}
+      <circle cx={cx} cy={cy} r="4.5" fill="#ffffff" />
+      <circle cx={cx} cy={cy} r="3.2" fill={trending ? VC.orange : VC.green} />
     </svg>
   );
 };
