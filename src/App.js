@@ -816,6 +816,29 @@ const TRANSIT_OFFENSE_LABELS = {
   'MURDER & NON-NEGL. MANSLAUGHTER': 'Murder',
 };
 
+// Transit-system homicides are NOT carried in the NYC Open Data complaint extract used
+// for the by-offense table below: murder complaints are coded to the geographic patrol
+// precinct, never to a transit_district, so they are structurally invisible to that
+// query (verified: 0 of 382 citywide 2024 murders carry a transit_district code; 0 ever).
+// The NYPD Transit Bureau tracks transit homicides separately. The figures below are the
+// Transit Bureau / MTA full-year counts as reported by NYPD and contemporaneous coverage.
+// Each is a hand-entered figure with a cited source, not a live feed.
+const TRANSIT_HOMICIDES = {
+  note: 'Homicides are tracked by the NYPD Transit Bureau, not coded to a transit district in the complaint-level extract, so they cannot appear in the table above.',
+  history: [
+    { year: 2022, count: 10 },
+    { year: 2023, count: 5 },
+    { year: 2024, count: 10 },
+  ],
+  // 2024 full-year figure widely reported as 10; NYPD Transit Bureau interim count was
+  // 9 through November 2024. 1997-2019 averaged roughly one to two transit murders per year.
+  context: 'Full-year 2024 was widely reported as 10 (NYPD Transit Bureau interim count was 9 through November). From 1997 to 2019 the system averaged roughly one to two homicides per year.',
+  sources: [
+    { label: 'Vital City, subway safety', url: 'https://www.vitalcitynyc.org/what-the-data-show-about-subway-safety/' },
+    { label: 'Gothamist (NYPD Transit Bureau figures)', url: 'https://gothamist.com/news/3-murders-on-nyc-subways-this-year-come-amid-costly-nypd-surge-vast-surveillance' },
+  ],
+};
+
 const TransitCrimeBox = ({ rawData, downloadCSV }) => {
   const cw = rawData?.citywide;
   const transit = cw?.additional_stats?.Transit;
@@ -1089,9 +1112,36 @@ const TransitCrimeBox = ({ rawData, downloadCSV }) => {
           </div>
         )}
 
+        {/* Transit homicides — sourced separately because murder is not coded to a transit
+            district in the complaint extract and cannot appear in the table above. */}
+        <div className="mt-6 p-4 bg-gray-50 border border-gray-200 rounded-sm max-w-3xl">
+          <div className="flex items-baseline justify-between gap-3 flex-wrap mb-2">
+            <span className="text-[11px] font-black uppercase tracking-widest text-gray-600">Transit homicides</span>
+            <span className="text-[11px] text-gray-400 italic">Not in the table above — see note</span>
+          </div>
+          <p className="text-[12px] text-gray-500 leading-relaxed mb-3">{TRANSIT_HOMICIDES.note}</p>
+          <div className="flex items-end gap-6 mb-3 flex-wrap">
+            {TRANSIT_HOMICIDES.history.map(h => (
+              <div key={h.year} className="flex flex-col">
+                <span className="text-[26px] leading-none font-black tabular-nums text-black">{h.count}</span>
+                <span className="text-[11px] font-bold uppercase tracking-widest text-gray-500 mt-1">{h.year}</span>
+              </div>
+            ))}
+          </div>
+          <p className="text-[12px] text-gray-500 leading-relaxed mb-2">{TRANSIT_HOMICIDES.context}</p>
+          <p className="text-[11px] text-gray-400 leading-relaxed">
+            Sources: {TRANSIT_HOMICIDES.sources.map((s, i) => (
+              <span key={s.url}>
+                {i > 0 && ' · '}
+                <a href={s.url} target="_blank" rel="noopener noreferrer" className="underline decoration-dotted underline-offset-2 hover:text-black">{s.label}</a>
+              </span>
+            ))}. Hand-entered figures, not a live feed; full-year counts may be revised by NYPD.
+          </p>
+        </div>
+
         <p className="text-[12px] text-gray-400 mt-6 italic leading-relaxed max-w-3xl">
           CompStat live = weekly NYPD CompStat feed for Transit Bureau (all major felonies combined, through week ending {period.week_end || '?'}).
-          By-offense totals = NYC Open Data complaint-level extract filtered to records with a transit-district code, most recent complete calendar year vs prior. The two sources use different counting rules, so the aggregates will not match exactly.
+          By-offense totals = NYC Open Data complaint-level extract filtered to records with a transit-district code, most recent complete calendar year vs prior. The two sources use different counting rules, so the aggregates will not match exactly. Homicides do not carry a transit-district code in the complaint-level extract, so they are absent from the by-offense table — transit homicides are tracked separately by the NYPD Transit Bureau and shown above.
         </p>
         </div>
         )}
