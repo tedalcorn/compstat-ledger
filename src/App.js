@@ -397,6 +397,7 @@ const TrendingUp = (p) => <Icon {...p}><polyline points="22 7 13.5 15.5 8.5 10.5
 const TrendingDown = (p) => <Icon {...p}><polyline points="22 17 13.5 8.5 8.5 13.5 2 7"/><polyline points="16 17 22 17 22 11"/></Icon>;
 const Target = (p) => <Icon {...p}><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></Icon>;
 const Activity = (p) => <Icon {...p}><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></Icon>;
+// eslint-disable-next-line no-unused-vars
 const AlertCircle = (p) => <Icon {...p}><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></Icon>;
 const MapPin = (p) => <Icon {...p}><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></Icon>;
 const Info = (p) => <Icon {...p}><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></Icon>;
@@ -626,6 +627,34 @@ function getHistoricalContext(history, item, currentYear) {
   })();
 
   return { series, annualized, ytdFrac, pandemicBadge, outlierBadge, sinceSuperlative, preLow: pre.length ? Math.min(...pre) : null, preHigh: pre.length ? Math.max(...pre) : null };
+}
+
+// Summarize how many of the 7 major felonies have returned to or fallen below their 2017-19
+// pre-pandemic average, using YTD-to-annualized projection. Returns: { below, total, above:[...names] }.
+function getPrePandemicRecovery(felonies, history) {
+  if (!felonies || !history || !history.length) return null;
+  const result = { below: 0, total: 0, above: [], at: [] };
+  felonies.forEach(f => {
+    const key = HISTORICAL_KEY[f.name];
+    if (!key) return;
+    const series = history.filter(d => typeof d[key] === 'number').map(d => ({ y: d.y, val: d[key] }));
+    const pre = series.filter(d => d.y >= 2017 && d.y <= 2019).map(d => d.val);
+    if (pre.length < 2) return;
+    const preMean = pre.reduce((a, b) => a + b, 0) / pre.length;
+    // Annualize current YTD against last full year so the comparison is apples-to-apples.
+    const lastFull = series.find(d => d.y === series[series.length - 1].y)?.val;
+    const ytdFrac = (lastFull && f.prior > 0 && lastFull > 0) ? (f.prior / lastFull) : null;
+    const annualized = (ytdFrac && ytdFrac > 0.05) ? f.current / ytdFrac : f.current;
+    result.total += 1;
+    if (annualized <= preMean) {
+      result.below += 1;
+    } else {
+      result.above.push({ name: f.name, ratio: annualized / preMean, annualized });
+    }
+  });
+  result.above.sort((a, b) => b.ratio - a.ratio);
+  if (result.total === 0) return null;
+  return result;
 }
 
 // Sparkline that renders a multi-year series with a pre-pandemic reference band and a "current" projection dot.
@@ -1772,7 +1801,7 @@ export default function App() {
 
   const buildTrendCards = () => {
     const cards = [];
-    const { driver, localAnomaly, localBrightSpot, topSurge, topDrop, totals } = parsedData;
+    const { driver, localAnomaly, localBrightSpot, topSurge, topDrop } = parsedData;
     if (activeGeo === 'citywide') {
       if (driver) {
         const dName = expandCrimeTitle(driver.name);
@@ -1803,23 +1832,37 @@ export default function App() {
         );
         cards.push({ id: 'flashpoints', icon: MapPin, title: 'Significant Local Shifts', content: flashContent });
       }
-      const lethalDots = Math.round(totals.lethalityRatio);
-      // Lead with the trauma-care insight, then the numbers. The interpretation is the story.
-      cards.push({ id: 'lethality', icon: AlertCircle, title: 'The Lethality Gap', content: `A widening gap between shootings and homicides often points to improved trauma care rather than fewer street shootings. For every **1 homicide** this period, there were **${totals.lethalityRatio.toFixed(1)} shooting victims** — a ratio of **1 : ${totals.lethalityRatio.toFixed(1)}**.`,
-        dataViz: (
-          <div className="mt-3">
-            <div className="flex items-center gap-1.5 mb-1">
-              <div className="w-3 h-3 rounded-full bg-gray-900 flex-shrink-0" title="1 homicide" />
-              <span className="text-[10px] font-bold text-gray-400 mx-0.5">:</span>
-              {Array.from({ length: lethalDots }).map((_, i) => (
-                <div key={i} className="w-3 h-3 rounded-full flex-shrink-0" style={{ background: VC.orange, opacity: 0.7 + (i / lethalDots) * 0.3 }} title="shooting victim" />
-              ))}
-              {totals.lethalityRatio % 1 > 0.3 && <div className="w-3 h-3 rounded-full flex-shrink-0 opacity-40" style={{ background: VC.orange }} />}
+      // Pre-pandemic recovery: how many of the 7 major felonies are back at or below their 2017-19 baseline,
+      // using a YTD-annualized projection. Replaces a "lethality gap" card that asserted a claim it didn't show.
+      const recovery = getPrePandemicRecovery(parsedData.felonies, crimeHistory.citywide);
+      if (recovery && recovery.total > 0) {
+        const stillAbove = recovery.above.slice(0, 3).map(a => expandCrimeTitle(a.name)).join(', ');
+        const aboveCount = recovery.above.length;
+        const content = aboveCount === 0
+          ? `All **${recovery.total} of the 7 major felonies** are now projected to finish the year at or below their 2017–19 pre-pandemic average.`
+          : `**${recovery.below} of the ${recovery.total} major felonies** tracked since 1993 are now projected to finish the year at or below their 2017–19 pre-pandemic average. Still above: ${stillAbove}${aboveCount > 3 ? `, and ${aboveCount - 3} other` : ''}.`;
+        cards.push({ id: 'recovery', icon: ShieldCheck, title: 'Pre-Pandemic Recovery', content,
+          dataViz: (
+            <div className="mt-3">
+              <div className="flex items-center gap-1.5 mb-1">
+                {Array.from({ length: recovery.total }).map((_, i) => {
+                  const isBelow = i < recovery.below;
+                  return (
+                    <div
+                      key={i}
+                      className="w-3 h-3 rounded-sm flex-shrink-0"
+                      style={{ background: isBelow ? VC.green : VC.orange, opacity: isBelow ? 1 : 0.85 }}
+                      title={isBelow ? 'At or below pre-pandemic' : 'Still above pre-pandemic'}
+                    />
+                  );
+                })}
+                <span className="text-[11px] font-bold text-gray-700 ml-2 tabular-nums">{recovery.below} / {recovery.total}</span>
+              </div>
+              <div className="text-[10px] text-gray-400 italic">Major felonies vs 2017–19 baseline</div>
             </div>
-            <div className="text-[10px] text-gray-400 italic">Shooting victims per homicide</div>
-          </div>
-        )
-      });
+          )
+        });
+      }
     } else {
       if (driver && driver.share >= 25) cards.push({ id: 'local_driver', icon: Target, title: 'Local Driver', content: `The change in **${expandCrimeTitle(driver.name)}** volume accounts for **${Math.round(driver.share)}%** of this area's trajectory.` });
       if (localAnomaly && !isTouristPrecinct) cards.push({ id: 'anomaly', icon: AlertTriangle, title: 'Elevated Local Risk', content: `The rate for **${expandCrimeTitle(localAnomaly.name)}** here is **${localAnomaly.localRate.toFixed(1)} per 100k residents**, which is **${localAnomaly.ratio.toFixed(1)}x** higher than the citywide average (${localAnomaly.cityRate.toFixed(1)}).` });
@@ -2150,7 +2193,7 @@ export default function App() {
         {activeGeo === 'citywide' && (() => {
           const story = buildStorySummary({ parsedData, hotspots, activeTab });
           const ineq = hotspots?.inequality;
-          const lethality = parsedData.totals.lethalityRatio;
+          const recovery = getPrePandemicRecovery(parsedData.felonies, crimeHistory.citywide);
           const spike = hotspots?.topPctSpike;
           return (
             <section className="mb-10 grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -2173,11 +2216,14 @@ export default function App() {
                   <p className="text-[14px] text-gray-600 mt-2.5 leading-relaxed">The {ineq.topCount} highest-crime precincts ({formatPop(ineq.topPop)} residents) match the violent crime total of the {ineq.bottomCount} safest ({formatPop(ineq.bottomPop)} residents).</p>
                 </div>
               )}
-              {typeof lethality === 'number' && lethality > 0 && (
+              {recovery && recovery.total > 0 && (
                 <div className="p-5 bg-white rounded-lg border border-gray-200">
-                  <div className="text-[11px] font-black uppercase tracking-widest text-gray-400 mb-2">Lethality gap</div>
-                  <div className="text-[32px] font-black tabular-nums text-black leading-none">1 : {lethality.toFixed(1)}</div>
-                  <p className="text-[14px] text-gray-600 mt-2.5 leading-relaxed">Shooting victims per homicide. A widening ratio often reflects better trauma care, not fewer shootings.</p>
+                  <div className="text-[11px] font-black uppercase tracking-widest text-gray-400 mb-2">Pre-pandemic recovery</div>
+                  <div className="text-[32px] font-black tabular-nums text-black leading-none">{recovery.below} <span className="text-gray-400 text-[24px] font-bold">/ {recovery.total}</span></div>
+                  <p className="text-[14px] text-gray-600 mt-2.5 leading-relaxed">
+                    Major felonies now projected to finish the year at or below their 2017–19 baseline.
+                    {recovery.above.length > 0 && <> Still above: <strong>{expandCrimeTitle(recovery.above[0].name)}</strong>{recovery.above.length > 1 ? ` and ${recovery.above.length - 1} other${recovery.above.length > 2 ? 's' : ''}` : ''}.</>}
+                  </p>
                 </div>
               )}
               {spike && typeof spike.pct === 'number' && spike.pct >= 25 && (
