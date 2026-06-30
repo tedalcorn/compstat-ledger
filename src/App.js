@@ -1836,11 +1836,13 @@ export default function App() {
       // using a YTD-annualized projection. Replaces a "lethality gap" card that asserted a claim it didn't show.
       const recovery = getPrePandemicRecovery(parsedData.felonies, crimeHistory.citywide);
       if (recovery && recovery.total > 0) {
-        const stillAbove = recovery.above.slice(0, 3).map(a => expandCrimeTitle(a.name)).join(', ');
-        const aboveCount = recovery.above.length;
-        const content = aboveCount === 0
+        // No Oxford comma per Vital City house style.
+        const joinNames = (names) => names.length <= 1 ? names.join('')
+          : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+        const stillAbove = joinNames(recovery.above.map(a => expandCrimeTitle(a.name)));
+        const content = recovery.above.length === 0
           ? `All **${recovery.total} of the 7 major felonies** are tracking at or below their 2017–19 pre-pandemic average so far this year.`
-          : `**${recovery.below} of the ${recovery.total} major felonies** tracked since 1993 are tracking at or below their 2017–19 pre-pandemic average so far this year. Still above: ${stillAbove}${aboveCount > 3 ? `, and ${aboveCount - 3} other` : ''}.`;
+          : `**${recovery.below} of the ${recovery.total} major felonies** tracked since 1993 are tracking at or below their 2017–19 pre-pandemic average so far this year. Still above: ${stillAbove}.`;
         cards.push({ id: 'recovery', icon: ShieldCheck, title: 'Pre-Pandemic Recovery', content,
           dataViz: (
             <div className="mt-3">
@@ -2222,7 +2224,11 @@ export default function App() {
                   <div className="text-[32px] font-black tabular-nums text-black leading-none">{recovery.below} <span className="text-gray-400 text-[24px] font-bold">/ {recovery.total}</span></div>
                   <p className="text-[14px] text-gray-600 mt-2.5 leading-relaxed">
                     Major felonies tracking at or below their 2017–19 pre-pandemic baseline so far this year.
-                    {recovery.above.length > 0 && <> Still above: <strong>{expandCrimeTitle(recovery.above[0].name)}</strong>{recovery.above.length > 1 ? ` and ${recovery.above.length - 1} other${recovery.above.length > 2 ? 's' : ''}` : ''}.</>}
+                    {recovery.above.length > 0 && (() => {
+                      const names = recovery.above.map(a => expandCrimeTitle(a.name));
+                      const joined = names.length <= 1 ? names.join('') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+                      return <> Still above: <strong>{joined}</strong>.</>;
+                    })()}
                   </p>
                 </div>
               )}
