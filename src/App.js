@@ -412,6 +412,40 @@ const ShieldCheck = (p) => <Icon {...p}><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 
 const ArrowLeft = (p) => <Icon {...p}><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></Icon>;
 
 /* ------------------------------------------------------------------ */
+/* SECTION ANCHOR LINK                                                 */
+/* Small "link to this section" affordance next to a heading. Clicking */
+/* copies a direct deep link (current view params + #id) to the        */
+/* clipboard so readers can share a link straight to that section.     */
+/* ------------------------------------------------------------------ */
+const AnchorLink = ({ id, label, size = 14, className = "" }) => {
+  const [copied, setCopied] = useState(false);
+  const copy = useCallback((e) => {
+    e.preventDefault();
+    if (typeof window === 'undefined') return;
+    const url = window.location.origin + window.location.pathname + window.location.search + '#' + id;
+    // writeText returns a promise that can reject (e.g. document not focused); swallow both sync + async failures.
+    try { navigator.clipboard?.writeText(url).catch(() => {}); } catch { /* clipboard may be unavailable */ }
+    // Reflect the section in the URL bar without polluting the back stack.
+    try { window.history.replaceState({}, '', url); } catch { window.location.hash = id; }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1200);
+  }, [id]);
+  return (
+    <a
+      href={`#${id}`}
+      onClick={copy}
+      title={`Copy a direct link to "${label}"`}
+      aria-label={`Copy a direct link to the ${label} section`}
+      className={`inline-flex items-center align-middle text-gray-300 hover:text-black transition-colors ${className}`}
+    >
+      {copied
+        ? <span className="text-[10px] font-black uppercase tracking-widest text-green-600">Link copied</span>
+        : <Link2 size={size} />}
+    </a>
+  );
+};
+
+/* ------------------------------------------------------------------ */
 /* CITY COMPARISON — Real-Time Crime Index (AH Datalytics)             */
 /* Fetched live from GitHub: AH-Datalytics/rtci scorecard.csv          */
 /* Source: realtimecrimeindex.com                                      */
@@ -740,7 +774,7 @@ const CityComparisonWidget = ({ rtciData, downloadCSV }) => {
     <section className="mb-10 p-6 bg-gray-50 rounded-sm border border-gray-200">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-5">
         <div>
-          <h3 className="text-[10px] font-black uppercase tracking-[0.15em] text-gray-400">How NYC Compares</h3>
+          <h3 className="text-[10px] font-black uppercase tracking-[0.15em] text-gray-400 flex items-center gap-2">How NYC Compares <AnchorLink id="national" label="How NYC Compares" size={12} /></h3>
           <p className="text-[13px] font-serif text-gray-600 mt-0.5">12-month rolling {metric.label.toLowerCase()} rate {metric.unit}</p>
         </div>
         <div className="flex flex-col items-end gap-1.5">
@@ -1005,7 +1039,7 @@ const TransitCrimeBox = ({ rawData, downloadCSV }) => {
       {/* Header */}
       <div className="flex items-start justify-between mb-6 gap-3 flex-wrap">
         <div className="flex-1 min-w-[220px]">
-          <h3 className="text-[12px] font-black uppercase tracking-[0.15em] text-gray-500">Transit System · Major Felony Index</h3>
+          <h3 className="text-[12px] font-black uppercase tracking-[0.15em] text-gray-500 flex items-center gap-2">Transit System · Major Felony Index <AnchorLink id="transit" label="Transit System" size={12} /></h3>
           <p className="text-[15px] font-serif text-gray-600 mt-1 max-w-2xl">
             Offenses recorded on the NYC subway and bus system. Live weekly CompStat feed from the NYPD Transit Bureau.
           </p>
@@ -1568,11 +1602,38 @@ export default function App() {
     }
   }, [appView, activeTab, activeGeo, mapMode, mapCrime, trendFilter]);
 
+  // Honor a #section hash from a shared deep link. Content renders async (live fetch,
+  // charts measuring themselves), so the layout keeps shifting after first paint and the
+  // browser's native on-load scroll lands in the wrong place. Keep re-aligning to the
+  // target for a short settle window — but bail out the instant the reader scrolls.
+  const hashTargetRef = useRef(typeof window !== 'undefined' ? window.location.hash.slice(1) : '');
+  const userScrolledRef = useRef(false);
+  useEffect(() => {
+    if (typeof window === 'undefined' || !hashTargetRef.current) return;
+    const markScrolled = () => { userScrolledRef.current = true; };
+    window.addEventListener('wheel', markScrolled, { passive: true });
+    window.addEventListener('touchmove', markScrolled, { passive: true });
+    window.addEventListener('keydown', markScrolled);
+    const stop = setTimeout(() => { hashTargetRef.current = ''; }, 4000);
+    return () => {
+      window.removeEventListener('wheel', markScrolled);
+      window.removeEventListener('touchmove', markScrolled);
+      window.removeEventListener('keydown', markScrolled);
+      clearTimeout(stop);
+    };
+  }, []);
+  // Runs after each render (and when async data lands) until the settle window closes.
+  useEffect(() => {
+    if (typeof window === 'undefined' || !hashTargetRef.current || userScrolledRef.current) return;
+    const el = document.getElementById(hashTargetRef.current);
+    if (el) el.scrollIntoView({ block: 'start' });
+  });
+
   // Copy the current URL (with all view state) to the clipboard so users can share specific views.
   const [copyLinkLabel, setCopyLinkLabel] = useState('Copy link');
   const handleCopyLink = useCallback(() => {
     try {
-      navigator.clipboard.writeText(window.location.href);
+      navigator.clipboard?.writeText(window.location.href).catch(() => {});
       setCopyLinkLabel('Copied!');
       setTimeout(() => setCopyLinkLabel('Copy link'), 1500);
     } catch {
@@ -2267,7 +2328,7 @@ export default function App() {
         </nav>
 
         <section id="trends" className="mb-8 pt-4 border-t border-gray-200 scroll-mt-16">
-          <h2 className="text-[12px] font-black uppercase tracking-[0.15em] text-gray-400 mb-5">Trends to Watch</h2>
+          <h2 className="text-[12px] font-black uppercase tracking-[0.15em] text-gray-400 mb-5 flex items-center gap-2">Trends to Watch <AnchorLink id="trends" label="Trends to Watch" size={12} /></h2>
           <div className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8`}>
             {trendCards.map(card => {
               const IconComp = card.icon;
@@ -2284,7 +2345,7 @@ export default function App() {
 
         <section id="offenses" className="mb-12 pt-8 border-t-[3px] border-black scroll-mt-16">
           <div className="flex flex-col md:flex-row justify-between items-baseline mb-5">
-            <h2 className="text-2xl font-black font-serif">All Tracked Offenses</h2>
+            <h2 className="text-2xl font-black font-serif flex items-center gap-2">All Tracked Offenses <AnchorLink id="offenses" label="All Tracked Offenses" /></h2>
             <span className="text-[11px] font-black uppercase tracking-widest text-gray-400 mt-2 md:mt-0">Ranked by Incident Volume</span>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 mb-6">
@@ -2297,7 +2358,7 @@ export default function App() {
             <section id="geography" className="mb-10 pt-8 border-t border-gray-200 scroll-mt-16">
               <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-5 gap-4">
                 <div>
-                  <h2 className="text-[11px] font-black uppercase tracking-[0.15em] text-gray-400 mb-1">Geographic View</h2>
+                  <h2 className="text-[11px] font-black uppercase tracking-[0.15em] text-gray-400 mb-1 flex items-center gap-2">Geographic View <AnchorLink id="geography" label="Geographic View" size={12} /></h2>
                   <p className="text-sm text-gray-500 font-serif">{mapMode === 'change' ? 'Year-over-year percent change by precinct.' : mapMode === 'volume' ? 'Absolute change in incident count vs prior year — where the raw numbers are growing or shrinking the most.' : 'Crime rates per 100k residents by precinct.'} Click any precinct to drill down.</p>
                 </div>
                 <div className="flex flex-wrap items-center gap-3">
@@ -2335,7 +2396,7 @@ export default function App() {
           {activeGeo === 'citywide' && <div id="transit" className="scroll-mt-16"><TransitCrimeBox rawData={rawData} downloadCSV={downloadCSV} /></div>}
 
           <div id="ledger" className="flex flex-col md:flex-row justify-between items-start md:items-end mb-6 border-b-2 border-black pb-4 gap-4 scroll-mt-16">
-            <h3 className="text-[14px] font-black uppercase tracking-[0.15em] text-black">{trendFilter === 'all' ? 'Detailed Data Ledger' : trendFilter === 'up' ? 'Rising Offenses' : 'Falling Offenses'}</h3>
+            <h3 className="text-[14px] font-black uppercase tracking-[0.15em] text-black flex items-center gap-2">{trendFilter === 'all' ? 'Detailed Data Ledger' : trendFilter === 'up' ? 'Rising Offenses' : 'Falling Offenses'} <AnchorLink id="ledger" label="Detailed Data Ledger" size={12} /></h3>
             <div className="flex items-center gap-3 w-full md:w-auto">
               <div className="flex bg-gray-100 p-1 rounded border border-gray-200 flex-1 md:flex-none">
                 <button onClick={() => setTrendFilter('all')} className={`flex-1 md:flex-none px-4 py-1.5 text-[10px] font-black uppercase ${trendFilter === 'all' ? 'bg-white shadow-sm' : 'text-gray-500'}`}>All</button>
