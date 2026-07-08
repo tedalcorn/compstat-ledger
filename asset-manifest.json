@@ -1,13 +1,13 @@
 {
   "files": {
-    "main.css": "/compstat-ledger/static/css/main.c3453966.css",
-    "main.js": "/compstat-ledger/static/js/main.b2009a8c.js",
+    "main.css": "/compstat-ledger/static/css/main.6fbb9e21.css",
+    "main.js": "/compstat-ledger/static/js/main.e467ef38.js",
     "index.html": "/compstat-ledger/index.html",
-    "main.c3453966.css.map": "/compstat-ledger/static/css/main.c3453966.css.map",
-    "main.b2009a8c.js.map": "/compstat-ledger/static/js/main.b2009a8c.js.map"
+    "main.6fbb9e21.css.map": "/compstat-ledger/static/css/main.6fbb9e21.css.map",
+    "main.e467ef38.js.map": "/compstat-ledger/static/js/main.e467ef38.js.map"
   },
   "entrypoints": [
-    "static/css/main.c3453966.css",
-    "static/js/main.b2009a8c.js"
+    "static/css/main.6fbb9e21.css",
+    "static/js/main.e467ef38.js"
   ]
 }
