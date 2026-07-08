@@ -204,7 +204,7 @@ const PrecinctRankingBars = ({ precinctRates, onSelect, mapMode = 'rate', hovere
   const botMax = mapMode === 'change' ? Math.abs(bottom5[0]?.pctChange || 1) : (top5[0]?.rate || 1);
 
   return (
-    <div className="flex flex-col justify-between h-full gap-6">
+    <div className="flex flex-col justify-between h-full gap-6 py-8">
       <div>
         <div className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2 flex items-center gap-1" style={{ color: VC.magenta }}>
           <TrendingUp size={12} /> {mapMode === 'change' ? 'Biggest % increases' : 'Highest rate (per 100k)'}

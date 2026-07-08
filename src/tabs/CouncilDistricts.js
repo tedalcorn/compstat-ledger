@@ -452,10 +452,10 @@ export default function CouncilDistricts({ rawData, activeTab, districtNum, setD
     }
     // 4 / 5. Sharpest single precinct×crime movers.
     if (f.sharpUp) {
-      out.push(`The sharpest increase was a ${upTok(Math.round(f.sharpUp.pct) + '% rise')} in ${expandCrime(f.sharpUp.crime)} in the **${f.sharpUp.precinct}**.`);
+      out.push(`The sharpest increase was a ${upTok(Math.round(f.sharpUp.pct) + '% rise in ' + expandCrime(f.sharpUp.crime))} in the **${f.sharpUp.precinct}**.`);
     }
     if (f.sharpDown) {
-      out.push(`The sharpest decline was a ${dnTok(Math.round(Math.abs(f.sharpDown.pct)) + '% drop')} in ${expandCrime(f.sharpDown.crime)} in the **${f.sharpDown.precinct}**.`);
+      out.push(`The sharpest decline was a ${dnTok(Math.round(Math.abs(f.sharpDown.pct)) + '% drop in ' + expandCrime(f.sharpDown.crime))} in the **${f.sharpDown.precinct}**.`);
     }
     return out;
   }, [f, district]);
@@ -483,7 +483,7 @@ export default function CouncilDistricts({ rawData, activeTab, districtNum, setD
       {/* Auto-generated top-line findings */}
       {findings.length > 0 && (
         <div className="mb-6 p-5 bg-gray-50 rounded-sm border border-gray-200">
-          <h4 className="text-[11px] font-black uppercase tracking-[0.15em] text-gray-400 mb-3">The bottom line</h4>
+          <h4 className="text-[11px] font-black uppercase tracking-[0.15em] text-gray-400 mb-3">Top-lines:</h4>
           <ul className="space-y-2.5">
             {findings.map((b, i) => (
               <li key={i} className="flex gap-2.5 font-serif text-[14px] leading-relaxed text-gray-700">
@@ -558,9 +558,9 @@ export default function CouncilDistricts({ rawData, activeTab, districtNum, setD
                 </tr>
               ))}
               {/* District (precinct average) + Citywide comparison lines */}
-              <tr className="border-t-2 border-gray-300 bg-gray-50/40">
+              <tr className="border-t-2 border-gray-400 bg-gray-100">
                 <td className="py-2.5 pr-2">
-                  <div className="text-[13px] font-black text-black">Precinct average</div>
+                  <div className="text-[13px] font-black text-black uppercase tracking-wide">Precinct average</div>
                   <div className="text-[11px] text-gray-500">Weighted by share of district</div>
                 </td>
                 <td className="py-2.5 text-right tabular-nums text-[13px] text-gray-400">—</td>
