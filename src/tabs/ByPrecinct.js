@@ -1,0 +1,265 @@
+import React, { useState, useMemo, useRef } from 'react';
+import { geoPath, geoMercator } from 'd3-geo';
+import precinctGeoJSON from '../data/nyc_precincts.json';
+import {
+  GEO_POPULATIONS, PRECINCT_NEIGHBORHOODS, VC,
+  crimeColor, changeColor, TrendingUp, TrendingDown,
+} from '../shared';
+
+/* ------------------------------------------------------------------ */
+/* PRECINCT CHOROPLETH MAP                                             */
+/* ------------------------------------------------------------------ */
+const PrecinctMap = ({ precinctRates, onSelect, mapMode = 'rate', width = 520, height = 520, externalHovered = null, onHover }) => {
+  const [hovered, setHovered] = useState(null);
+  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+  const svgRef = useRef(null);
+
+  const { pathFn, rateMap, minRate, maxRate, maxAbsChange } = useMemo(() => {
+    const projection = geoMercator().fitSize([width, height], precinctGeoJSON);
+    const pathFn = geoPath().projection(projection);
+    const rateMap = {};
+    let minR = Infinity, maxR = 0, maxAbs = 0;
+    precinctRates.forEach(p => {
+      p.countDelta = (p.count != null && p.priorCount != null) ? (p.count - p.priorCount) : null;
+      rateMap[p.precinctNum] = p;
+      if (!p.isTourist) {
+        if (p.rate != null) {
+          if (p.rate < minR) minR = p.rate;
+          if (p.rate > maxR) maxR = p.rate;
+        }
+        if (p.pctChange != null) maxAbs = Math.max(maxAbs, Math.abs(p.pctChange));
+      }
+    });
+    if (minR === Infinity) minR = 0;
+    if (maxAbs > 100) maxAbs = 100;
+    return { pathFn, rateMap, minRate: minR, maxRate: maxR, maxAbsChange: maxAbs };
+  }, [precinctRates, width, height]);
+
+  const handleMouse = (e) => {
+    if (!svgRef.current) return;
+    const rect = svgRef.current.getBoundingClientRect();
+    setMousePos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+  };
+
+  const activeHover = hovered != null ? hovered : externalHovered;
+  const hoveredData = hovered ? rateMap[hovered] : null;
+
+  // Compute rank among non-tourist precincts (by rate, highest = rank 1)
+  const rateRanks = useMemo(() => {
+    const rankable = precinctRates.filter(p => !p.isTourist && p.rate != null).sort((a, b) => b.rate - a.rate);
+    const map = {};
+    rankable.forEach((p, i) => { map[p.precinctNum] = { rank: i + 1, total: rankable.length }; });
+    return map;
+  }, [precinctRates]);
+
+  return (
+    <div className="relative">
+      <svg ref={svgRef} viewBox={`0 0 ${width} ${height}`} className="w-full h-auto" onMouseMove={handleMouse}>
+        <defs>
+          <pattern id="tourist-hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+            <line x1="0" y1="0" x2="0" y2="6" stroke="#1f2937" strokeOpacity="0.5" strokeWidth="1" />
+          </pattern>
+        </defs>
+        {[...precinctGeoJSON.features]
+          .sort((a, b) => (a.properties.precinct === activeHover ? 1 : 0) - (b.properties.precinct === activeHover ? 1 : 0))
+          .map(feature => {
+          const pNum = feature.properties.precinct;
+          const pData = rateMap[pNum];
+          // Tourist precincts show their actual color; the hatch overlay flags them visually
+          // and the tooltip notes that rate is distorted by visitor population. % change is
+          // NOT distorted by daytime population, so it stays in rankings.
+          const fill = mapMode === 'change' ? changeColor(pData?.pctChange, maxAbsChange)
+            : crimeColor(pData?.rate, minRate, maxRate);
+          const isActive = activeHover === pNum;
+          return (
+            <g key={pNum}>
+              <path
+                d={pathFn(feature)}
+                fill={fill}
+                stroke={isActive ? '#111827' : '#fff'}
+                strokeWidth={isActive ? 2 : 0.5}
+                style={{ cursor: 'pointer', transition: 'fill 0.15s, stroke 0.15s' }}
+                onMouseEnter={() => { setHovered(pNum); onHover && onHover(pNum); }}
+                onMouseLeave={() => { setHovered(null); onHover && onHover(null); }}
+                onClick={() => pData && onSelect(pData.precinct)}
+              />
+              {pData?.isTourist && (
+                <path d={pathFn(feature)} fill="url(#tourist-hatch)" stroke="none" pointerEvents="none" />
+              )}
+            </g>
+          );
+        })}
+      </svg>
+      {hoveredData && (() => {
+        const pop = GEO_POPULATIONS[hoveredData.precinct];
+        const rankInfo = rateRanks[hoveredData.precinctNum];
+        return (
+          <div
+            className="absolute pointer-events-none bg-white border border-gray-200 shadow-xl rounded p-3 z-50 text-[11px]"
+            style={{ left: Math.min(mousePos.x + 12, width - 220), top: mousePos.y - 10, minWidth: 200 }}
+          >
+            <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
+              <span className="font-black text-black text-[12px]">{hoveredData.precinct}</span>
+              {hoveredData.isTourist && <span className="text-[8px] font-bold uppercase tracking-wide px-1 py-[1px] rounded-sm bg-gray-800 text-white">Tourist hub</span>}
+            </div>
+            {PRECINCT_NEIGHBORHOODS[hoveredData.precinct] && <div className="text-gray-500 mb-2">{PRECINCT_NEIGHBORHOODS[hoveredData.precinct]}</div>}
+            <div className="font-bold text-black">{hoveredData.count.toLocaleString()} incidents</div>
+            {hoveredData.rate != null && (
+              <div className="text-gray-600">
+                {hoveredData.rate.toFixed(1)} per 100k
+                {hoveredData.isTourist ? <span className="text-gray-400 italic"> (residents only — not comparable)</span> : rankInfo ? ` · Rank ${rankInfo.rank} of ${rankInfo.total}` : ''}
+              </div>
+            )}
+            {hoveredData.countDelta != null && (
+              <div className="font-medium mt-1" style={{ color: hoveredData.countDelta > 0 ? '#c0392b' : hoveredData.countDelta < 0 ? '#27ae60' : '#333' }}>
+                {hoveredData.countDelta > 0 ? '+' : ''}{hoveredData.countDelta.toLocaleString()} incidents vs last year
+                {hoveredData.pctChange != null && <span className="text-gray-500 font-normal"> ({hoveredData.pctChange > 0 ? '+' : ''}{hoveredData.pctChange.toFixed(1)}%)</span>}
+              </div>
+            )}
+            {hoveredData.priorCount != null && <div className="text-gray-400 text-[10px]">{hoveredData.priorCount.toLocaleString()} prior year</div>}
+            {pop && <div className="text-gray-400 mt-1">Pop. {pop.toLocaleString()}{hoveredData.isTourist && <span className="italic"> · residents only</span>}</div>}
+          </div>
+        );
+      })()}
+      {/* Legend */}
+      <div className="flex items-center gap-2 mt-3 text-[10px] text-gray-500">
+        {mapMode === 'change' ? (
+          <>
+            <span>Decrease</span>
+            <div className="flex-1 h-2 rounded" style={{ background: `linear-gradient(to right, rgb(45,160,55), rgb(140,210,140), rgb(240,240,240), rgb(210,140,135), rgb(190,70,65))` }} />
+            <span>Increase</span>
+          </>
+        ) : (
+          <>
+            <span>Low</span>
+            <div className="flex-1 h-2 rounded" style={{ background: `linear-gradient(to right, rgb(240,240,240), rgb(255,213,189), rgb(255,124,83), rgb(231,70,109), rgb(57,72,130))` }} />
+            <span>High</span>
+          </>
+        )}
+        <span className="ml-3 pl-3 border-l border-gray-300 flex items-center gap-1" title="Tourist/commercial precincts: per-100k rates use residential population only and are not comparable. % change is not distorted.">
+          <span className="inline-block w-3 h-3" style={{ backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 2px, rgba(31,41,55,0.5) 2px, rgba(31,41,55,0.5) 3px)' }} />
+          Tourist hubs: 14th, 18th, 22nd {mapMode === 'rate' && <span className="italic text-gray-400">(rate distorted)</span>}
+        </span>
+      </div>
+    </div>
+  );
+};
+
+/* ------------------------------------------------------------------ */
+/* PRECINCT RANKING BARS                                               */
+/* ------------------------------------------------------------------ */
+const PrecinctRankingBars = ({ precinctRates, onSelect, mapMode = 'rate', hoveredPrecinctNum = null, onHover }) => {
+  const { top5, bottom5 } = useMemo(() => {
+    // Tourist precincts (Times Square / Midtown South) have distorted per-capita rates
+    // but their % change is not distorted by daytime population, so we include them in
+    // change rankings and only exclude them from the rate-mode ranking.
+    if (mapMode === 'change') {
+      const valid = precinctRates.filter(p => p.pctChange != null && p.priorCount > 5).sort((a, b) => b.pctChange - a.pctChange);
+      return { top5: valid.slice(0, 5), bottom5: valid.slice(-5).reverse() };
+    }
+    const valid = precinctRates.filter(p => p.rate != null && !p.isTourist).sort((a, b) => b.rate - a.rate);
+    return { top5: valid.slice(0, 5), bottom5: valid.slice(-5).reverse() };
+  }, [precinctRates, mapMode]);
+
+  const renderBar = (item, color, maxW, maxVal) => {
+    const val = mapMode === 'change' ? Math.abs(item.pctChange) : item.rate;
+    const barW = Math.max(4, (val / (maxVal || 1)) * maxW);
+    const hood = PRECINCT_NEIGHBORHOODS[item.precinct];
+    const label = hood ? `${item.precinct.replace(' Precinct', '')} (${hood.split(',')[0]})` : item.precinct.replace(' Precinct', '');
+    const displayVal = mapMode === 'change' ? `${item.pctChange > 0 ? '+' : ''}${item.pctChange.toFixed(1)}%` : item.rate.toFixed(0);
+    const isActive = hoveredPrecinctNum === item.precinctNum;
+    return (
+      <div
+        key={item.precinct}
+        className={`flex items-center gap-2 py-1 cursor-pointer -mx-2 px-2 rounded transition-colors ${isActive ? 'bg-gray-100' : 'hover:bg-gray-50'}`}
+        onClick={() => onSelect(item.precinct)}
+        onMouseEnter={() => onHover && onHover(item.precinctNum)}
+        onMouseLeave={() => onHover && onHover(null)}
+      >
+        <span className="text-[11px] font-bold text-gray-800 w-28 truncate flex-shrink-0 flex items-center gap-1" title={item.precinct}>
+          {label}
+          {item.isTourist && <span className="text-[7px] font-black uppercase tracking-wide px-1 rounded-sm bg-gray-800 text-white" title="Tourist hub — visitor population inflates totals">T</span>}
+        </span>
+        <div className="flex-1 flex items-center gap-2">
+          <div className="h-4 rounded-sm" style={{ width: `${(barW / maxW) * 100}%`, minWidth: 4, background: color }} />
+          <span className="text-[11px] font-bold tabular-nums" style={{ color }}>{displayVal}</span>
+        </div>
+      </div>
+    );
+  };
+
+  const topMax = mapMode === 'change' ? Math.abs(top5[0]?.pctChange || 1) : (top5[0]?.rate || 1);
+  const botMax = mapMode === 'change' ? Math.abs(bottom5[0]?.pctChange || 1) : (top5[0]?.rate || 1);
+
+  return (
+    <div className="flex flex-col justify-between h-full">
+      <div>
+        <div className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-3 flex items-center gap-1" style={{ color: VC.magenta }}>
+          <TrendingUp size={12} /> {mapMode === 'change' ? 'Biggest % increases' : 'Highest rate (per 100k)'}
+        </div>
+        {top5.map(item => renderBar(item, VC.magenta, 200, topMax))}
+      </div>
+      <div className="mt-6 pt-4 border-t border-gray-100">
+        <div className="text-[10px] font-black uppercase tracking-widest mb-3 flex items-center gap-1" style={{ color: VC.green }}>
+          <TrendingDown size={12} /> {mapMode === 'change' ? 'Biggest % decreases' : 'Lowest rate (per 100k)'}
+        </div>
+        {bottom5.map(item => renderBar(item, VC.green, 200, botMax))}
+      </div>
+    </div>
+  );
+};
+
+/* ------------------------------------------------------------------ */
+/* BY PRECINCT TAB                                                     */
+/* ------------------------------------------------------------------ */
+const CRIME_PILLS = [
+  ['all', 'All Major'], ['violent', 'Violent'], ['property', 'Property'],
+  ['Murder', 'Murder'], ['Rape', 'Rape'], ['Robbery', 'Robbery'], ['Fel. Assault', 'Fel. Assault'],
+  ['Burglary', 'Burglary'], ['Gr. Larceny', 'Gr. Larceny'], ['G.L.A.', 'G.L.A.'],
+  ['Petit Larceny', 'Petit Larceny'], ['Misd. Assault', 'Misd. Assault'],
+];
+
+export default function ByPrecinct({ precinctRates, mapMode, setMapMode, mapCrime, setMapCrime, onSelectPrecinct }) {
+  const [hoveredPrecinctNum, setHoveredPrecinctNum] = useState(null);
+
+  return (
+    <div>
+      <div className="mb-5">
+        <h2 className="text-2xl font-black font-serif mb-1">By Precinct</h2>
+        {/* Fixed-height description so switching modes never shifts the controls below */}
+        <p className="text-sm text-gray-500 font-serif min-h-[20px]">
+          {mapMode === 'change' ? 'Year-over-year percent change by precinct.' : 'Crime rates per 100k residents by precinct.'} Click any precinct to see its full numbers.
+        </p>
+      </div>
+
+      {/* Controls — two stable rows so nothing shifts when a selection changes */}
+      <div className="flex flex-col gap-2.5 mb-6">
+        <div className="flex items-center gap-3 flex-wrap">
+          <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 w-16 flex-shrink-0">Measure</span>
+          <div className="flex gap-1 bg-gray-100 p-1 rounded border border-gray-200">
+            {[['rate', 'Rate per 100k'], ['change', '% Change']].map(([val, label]) => (
+              <button key={val} onClick={() => setMapMode(val)} className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-sm transition-colors ${mapMode === val ? 'bg-white shadow-sm text-black' : 'text-gray-500 hover:text-black'}`}>{label}</button>
+            ))}
+          </div>
+        </div>
+        <div className="flex items-start gap-3 flex-wrap">
+          <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 w-16 flex-shrink-0 pt-2.5">Crime</span>
+          <div className="flex gap-1 bg-gray-100 p-1 rounded border border-gray-200 flex-wrap">
+            {CRIME_PILLS.map(([val, label]) => (
+              <button key={val} onClick={() => setMapCrime(val)} className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-sm transition-colors ${mapCrime === val ? 'bg-white shadow-sm text-black' : 'text-gray-500 hover:text-black'}`}>{label}</button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
+        <div className="lg:col-span-3">
+          <PrecinctMap precinctRates={precinctRates} onSelect={onSelectPrecinct} mapMode={mapMode} externalHovered={hoveredPrecinctNum} onHover={setHoveredPrecinctNum} />
+        </div>
+        <div className="lg:col-span-2">
+          <PrecinctRankingBars precinctRates={precinctRates} onSelect={onSelectPrecinct} mapMode={mapMode} hoveredPrecinctNum={hoveredPrecinctNum} onHover={setHoveredPrecinctNum} />
+        </div>
+      </div>
+    </div>
+  );
+}
