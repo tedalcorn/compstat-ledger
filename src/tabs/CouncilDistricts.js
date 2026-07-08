@@ -200,7 +200,7 @@ const tallyGeo = (geoRecord, names) => {
   return { cur, pri, pct: pri > 0 ? ((cur - pri) / pri) * 100 : null, diff: cur - pri };
 };
 
-const DistrictMap = ({ district, onSelectPrecinct, shootings, showShootings, setShowShootings, shootingsLoaded, printMode = false, width = 560, height = 520 }) => {
+const DistrictMap = ({ district, onSelectPrecinct, shootings, showShootings, setShowShootings, shootingsLoaded, coverageLabel = '', printMode = false, width = 560, height = 520 }) => {
   const [hoverKey, setHoverKey] = useState(null); // dot enlarged on hover
   const [active, setActive] = useState(null);     // clicked dot → pinned popover
   const svgRef = useRef(null);
@@ -240,7 +240,7 @@ const DistrictMap = ({ district, onSelectPrecinct, shootings, showShootings, set
           className={`absolute top-2 left-2 z-10 flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest px-2.5 py-1.5 rounded border shadow-sm transition-colors ${!shootingsLoaded ? 'bg-white/90 text-gray-300 border-gray-200 cursor-wait' : showShootings ? 'bg-gray-900 text-white border-gray-900' : 'bg-white/95 text-gray-700 border-gray-300 hover:border-gray-500'}`}
         >
           <span className="inline-block w-2.5 h-2.5 rounded-full" style={{ background: '#c0143c' }} />
-          {showShootings ? 'Hide' : 'Show'} shootings YTD{shootingsLoaded ? ` (${districtShootings.length})` : ' …'}
+          {showShootings ? 'Hide' : 'Show'} Shootings ({coverageLabel}){shootingsLoaded ? ` · ${districtShootings.length}` : ' …'}
         </button>
       )}
       <svg ref={svgRef} viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="xMidYMid meet" className="w-full h-full bg-gray-50 rounded-sm border border-gray-200">
@@ -369,7 +369,7 @@ const DistrictTitleSelector = ({ districts, district, setDistrictNum }) => {
         <ChevronDown size={18} className="text-gray-400 group-hover:text-indigo-600" />
       </div>
       <div className="flex items-baseline gap-2 mt-0.5">
-        {district.member && <span className="text-[14px] font-serif text-gray-600">{district.member}</span>}
+        {district.member && <span className="text-[14px] font-serif text-gray-600">Council Member {district.member}</span>}
         <span className="text-[12px] text-gray-400">· {district.precincts.length} precincts</span>
       </div>
     </button>
@@ -398,6 +398,15 @@ export default function CouncilDistricts({ rawData, activeTab, districtNum, setD
   const period = rawData?.citywide?.report_period || {};
   const endYear = period?.week_end ? new Date(period.week_end).getFullYear() : new Date().getFullYear();
   const yy = (y) => `’${String(y).slice(-2)}`;
+
+  // How much of the year the shooting feed covers, phrased as quarters: Q1, Q1-2, Q1-3,
+  // or just the year once all four quarters are in. Derived from the latest incident date.
+  const coverageLabel = useMemo(() => {
+    const to = shootingWindow?.to;
+    if (!to) return `Q1 ${endYear}`;
+    const q = Math.ceil(Number(to.slice(5, 7)) / 3); // 1..4 from the month
+    return q >= 4 ? `${endYear}` : q === 1 ? `Q1 ${endYear}` : `Q1-${q} ${endYear}`;
+  }, [shootingWindow, endYear]);
 
   // Each overlapping precinct's YTD major-index totals, split into violent / property subsets.
   const rows = useMemo(() => {
@@ -462,10 +471,15 @@ export default function CouncilDistricts({ rawData, activeTab, districtNum, setD
     return out;
   }, [f, district]);
 
+  // On narrow phones the full "Up 11.9%" phrasing plus the count subline is too wide to keep
+  // all three measures, so we fall back to a compact signed "+11.9%" and drop the subline.
+  const pctCompact = (v) => (v > 0 ? '+' : '') + v.toFixed(1).replace(/\.0$/, '') + '%';
   const changeCell = (t, key = '') => (
-    <td key={key} className="py-2.5 pl-3 text-right tabular-nums text-[13px] font-bold whitespace-nowrap" style={{ color: pctColor(t.pct) }}>
-      {typeof t.pct === 'number' ? dirPct(t.pct) : '—'}
-      {t.diff != null && <div className="text-[10px] font-normal text-gray-400">{dirCount(Math.round(t.diff))}</div>}
+    <td key={key} className="py-2.5 pl-2 sm:pl-3 text-right tabular-nums text-[13px] font-bold whitespace-nowrap" style={{ color: pctColor(t.pct) }}>
+      {typeof t.pct === 'number'
+        ? (<><span className="sm:hidden">{pctCompact(t.pct)}</span><span className="hidden sm:inline">{dirPct(t.pct)}</span></>)
+        : '—'}
+      {t.diff != null && <div className="hidden sm:block text-[10px] font-normal text-gray-400">{dirCount(Math.round(t.diff))}</div>}
     </td>
   );
 
@@ -513,6 +527,7 @@ export default function CouncilDistricts({ rawData, activeTab, districtNum, setD
           showShootings={showShootings}
           setShowShootings={setShowShootings}
           shootingsLoaded={shootings != null}
+          coverageLabel={coverageLabel}
         />
 
         <div>
@@ -546,11 +561,12 @@ export default function CouncilDistricts({ rawData, activeTab, districtNum, setD
             </button>
             </div>
           </div>
-          <table className="w-full text-left border-collapse">
+          <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse min-w-0 sm:min-w-[520px]">
             <thead>
               <tr className="text-[10px] font-black uppercase tracking-widest text-gray-400 border-b-2 border-black">
                 <th className="py-2">Precinct</th>
-                <th className="py-2 text-right">Share of district</th>
+                <th className="py-2 text-right leading-tight">Share of<br className="sm:hidden" /> district</th>
                 <th className="py-2 text-right">All</th>
                 <th className="py-2 text-right">Violent</th>
                 <th className="py-2 text-right">Property</th>
@@ -597,6 +613,7 @@ export default function CouncilDistricts({ rawData, activeTab, districtNum, setD
               </tr>
             </tbody>
           </table>
+          </div>
 
           {activeTab === 'wtd' && (
             <p className="mt-3 text-[11px] font-serif italic text-gray-500 leading-snug">
@@ -623,16 +640,16 @@ export default function CouncilDistricts({ rawData, activeTab, districtNum, setD
             <div className="text-[19px] font-black tabular-nums">{period.week_end ? new Date(period.week_end).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : '—'}</div>
           </div>
         </div>
-        <p className="text-[12px] leading-relaxed text-gray-700 mb-4 flex-shrink-0" style={{ fontFamily: 'Georgia, serif' }}>
+        <p className="text-[13.5px] leading-relaxed text-gray-700 mb-4 flex-shrink-0" style={{ fontFamily: 'Georgia, serif' }}>
           Every week the New York City Police Department updates data on reported crime in precincts across the city, in a process known as CompStat. This page decodes that data so that no matter where you are in the city, you can understand how crime is changing near you.
         </p>
         <div className="mb-5 flex-shrink-0">
           <div className="text-[34px] font-black leading-none" style={{ fontFamily: 'system-ui, sans-serif' }}>Council District {district.district}</div>
-          <div className="text-[14px] text-gray-600 mt-1" style={{ fontFamily: 'Georgia, serif' }}>{district.member}{district.member ? ' · ' : ''}{district.precincts.length} precincts</div>
+          <div className="text-[14px] text-gray-600 mt-1" style={{ fontFamily: 'Georgia, serif' }}>{district.member ? `Council Member ${district.member} · ` : ''}{district.precincts.length} precincts</div>
         </div>
-        <div className="mb-4 p-4 bg-gray-50 border border-gray-300 rounded flex-shrink-0">
+        <div className="mb-4 p-4 bg-gray-50 border border-gray-300 rounded flex-shrink-0 overflow-hidden" style={{ height: '2.75in' }}>
           <div className="text-[10px] font-black uppercase tracking-[0.15em] text-gray-500 mb-2.5" style={{ fontFamily: 'system-ui, sans-serif' }}>Top-lines</div>
-          <ul className="space-y-2.5" style={{ fontFamily: 'Georgia, serif' }}>
+          <ul className="space-y-2" style={{ fontFamily: 'Georgia, serif' }}>
             {findings.map((b, i) => (
               <li key={i} className="flex gap-2 text-[13px] leading-relaxed text-gray-800">
                 <span className="text-gray-400">▪</span><span>{renderFinding(b)}</span>
@@ -645,27 +662,28 @@ export default function CouncilDistricts({ rawData, activeTab, districtNum, setD
             <div className="flex-1 min-h-0">
               <DistrictMap district={district} onSelectPrecinct={() => {}} shootings={shootings?.points} showShootings={true} setShowShootings={() => {}} shootingsLoaded={shootings != null} printMode />
             </div>
-            <p className="text-[8px] text-gray-500 mt-1.5 leading-tight flex-shrink-0" style={{ fontFamily: 'system-ui, sans-serif' }}>
-              Red dots: shooting incidents inside the district so far this year{shootingWindow ? ` (${fmtDate(shootingWindow.from)}–${fmtDate(shootingWindow.to)}, ${shootingWindow.located} mapped)` : ''}. Source: NYPD Open Data.
+            <p className="flex items-center gap-1.5 text-[8px] text-gray-500 mt-1.5 leading-tight flex-shrink-0" style={{ fontFamily: 'system-ui, sans-serif' }}>
+              <span className="inline-block w-2 h-2 rounded-full flex-shrink-0" style={{ background: '#c0143c' }} />
+              <span>Shooting incident{shootingWindow ? ` ${fmtDate(shootingWindow.from)}–${fmtDate(shootingWindow.to)}` : ''}. Source: NYPD Open Data.</span>
             </p>
           </div>
-          <div style={{ fontFamily: 'system-ui, sans-serif' }}>
-            <div className="text-[9px] font-black uppercase tracking-[0.12em] text-gray-500 mb-2 leading-tight">Major felonies by precinct<br />Year-on-year change (YTD)</div>
-            <table className="w-full border-collapse">
+          <div className="flex flex-col min-h-0" style={{ fontFamily: 'system-ui, sans-serif' }}>
+            <div className="text-[9px] font-black uppercase tracking-[0.12em] text-gray-500 mb-2 leading-tight flex-shrink-0">Major felonies by precinct<br />Year-on-year change (YTD)</div>
+            <table className="w-full border-collapse flex-1" style={{ height: '100%' }}>
               <thead>
                 <tr className="text-[7px] font-black uppercase tracking-wide text-gray-400 border-b-2 border-black">
-                  <th className="text-left py-1">Precinct</th>
-                  <th className="text-right py-1">Share</th>
-                  <th className="text-right py-1 pl-1.5">All</th>
-                  <th className="text-right py-1 pl-1.5">Violent</th>
-                  <th className="text-right py-1 pl-1.5">Property</th>
+                  <th className="text-left py-1 align-bottom">Precinct</th>
+                  <th className="text-right py-1 align-bottom leading-tight">Share of<br />district</th>
+                  <th className="text-right py-1 pl-1.5 align-bottom">All</th>
+                  <th className="text-right py-1 pl-1.5 align-bottom">Violent</th>
+                  <th className="text-right py-1 pl-1.5 align-bottom">Property</th>
                 </tr>
               </thead>
               <tbody>
                 {rows.map(r => (
                   <tr key={r.precinct} className="border-b border-gray-100">
                     <td className="py-[5px] pr-1"><div className="text-[10px] font-bold text-black leading-tight">{r.geoKey.replace(' Precinct', ' Pct')}</div><div className="text-[8px] text-gray-500 leading-tight">{(r.hoods || '').split(',')[0]}</div></td>
-                    <td className="text-right text-[10px] font-bold text-gray-700 align-top pt-[5px]">{Math.round(r.share * 100)}%</td>
+                    <td className="text-right text-[10px] font-bold text-gray-700">{Math.round(r.share * 100)}%</td>
                     {pdfCell(r.all)}{pdfCell(r.violent)}{pdfCell(r.property)}
                   </tr>
                 ))}

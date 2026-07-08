@@ -200,14 +200,14 @@ export default function Transit({ rawData, downloadCSV }) {
         {breakdownErr && <div className="text-[13px] text-gray-400 italic py-4">Per-offense breakdown unavailable — NYC Open Data could not be reached.</div>}
         {breakdown && (
           <div>
-            <div className="flex items-center gap-4 pb-2.5 mb-1 border-b border-gray-300 bg-gray-50 -mx-2 px-2 rounded-sm">
-              <span className="w-40 text-left text-[10px] font-black uppercase tracking-widest text-gray-400">Offense</span>
-              <div className="flex-1 min-w-[120px] flex items-center gap-4 text-[10px] font-bold uppercase tracking-widest text-gray-400">
+            <div className="flex items-center gap-2 sm:gap-4 pb-2.5 mb-1 border-b border-gray-300 bg-gray-50 -mx-2 px-2 rounded-sm">
+              <span className="w-36 sm:w-40 text-left text-[10px] font-black uppercase tracking-widest text-gray-400">Offense</span>
+              <div className="hidden sm:flex flex-1 min-w-[120px] items-center gap-4 text-[10px] font-bold uppercase tracking-widest text-gray-400">
                 <span className="flex items-center gap-1.5"><span className="inline-block w-4 h-[7px] bg-gray-900 rounded-sm" /> {breakdown.year}</span>
                 <span className="flex items-center gap-1.5"><span className="inline-block w-4 h-[7px] bg-gray-300 rounded-sm" /> {breakdown.priorYear}</span>
               </div>
-              <span className="w-16 text-right"><SortHeader field="volume">{breakdown.year}</SortHeader></span>
-              <span className="w-56 text-right"><SortHeader field="delta">YTD change</SortHeader></span>
+              <span className="flex-1 sm:flex-none w-16 text-right"><SortHeader field="volume">{breakdown.year}</SortHeader></span>
+              <span className="w-56 text-right hidden sm:inline-block"><SortHeader field="delta">YTD change</SortHeader></span>
               <span className="w-24 text-right"><SortHeader field="change">YTD change (%)</SortHeader></span>
             </div>
             {sorted.map(r => {
@@ -222,16 +222,16 @@ export default function Transit({ rawData, downloadCSV }) {
               const curW = showCurBar ? Math.max(rawCurW, 2) : 0;
               const priW = showPriBar ? Math.max(rawPriW, 2) : 0;
               return (
-                <div key={r.name} className="flex items-center gap-4 py-2 text-[14px] border-b border-gray-50 hover:bg-gray-50/60 -mx-2 px-2 rounded-sm transition-colors">
-                  <span className="w-40 flex-shrink-0 font-bold text-gray-800 truncate" title={r.label}>{r.label}</span>
-                  <div className="flex-1 min-w-[120px]">
+                <div key={r.name} className="flex items-center gap-2 sm:gap-4 py-2 text-[14px] border-b border-gray-50 hover:bg-gray-50/60 -mx-2 px-2 rounded-sm transition-colors">
+                  <span className="w-36 sm:w-40 flex-shrink-0 font-bold text-gray-800 truncate" title={r.label}>{r.label}</span>
+                  <div className="hidden sm:block flex-1 min-w-[120px]">
                     <div className="relative h-[20px]">
                       {showCurBar && <div className="absolute top-0 left-0 h-[8px] rounded-sm bg-gray-900" style={{ width: `${curW}%` }} />}
                       {showPriBar && <div className="absolute top-[11px] left-0 h-[8px] rounded-sm bg-gray-300" style={{ width: `${priW}%` }} />}
                     </div>
                   </div>
-                  <span className="w-16 text-right tabular-nums font-black text-black">{r.cur.toLocaleString()}</span>
-                  <span className="w-56 text-right tabular-nums">
+                  <span className="flex-1 sm:flex-none w-16 text-right tabular-nums font-black text-black">{r.cur.toLocaleString()}</span>
+                  <span className="w-56 text-right tabular-nums hidden sm:inline-block">
                     <span className="font-bold" style={{ color: pctColor(r.diff) }}>{dirCount(r.diff, 'incidents')}</span>
                     <span className="text-gray-400 font-normal text-[12px]"> (vs. {r.prior.toLocaleString()} in {yy(breakdown.priorYear)})</span>
                   </span>

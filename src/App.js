@@ -351,7 +351,8 @@ export default function App() {
       <div className="max-w-[1100px] mx-auto px-5 sm:px-8">
 
         {/* Single-row navigation: brand, section tabs, geography, period toggle */}
-        <div className="sticky top-0 z-40 bg-white/95 backdrop-blur border-b border-gray-200 -mx-5 sm:-mx-8 px-5 sm:px-8 mb-8 py-2 flex flex-wrap items-center gap-x-2 gap-y-2 print:hidden">
+        <div className="sticky top-0 z-40 bg-white/95 backdrop-blur border-b border-gray-200 -mx-5 sm:-mx-8 px-5 sm:px-8 mb-8 py-2 flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-x-2 gap-y-1.5 print:hidden">
+          <div className="flex items-center gap-1 w-full sm:w-auto min-w-0 overflow-x-auto sm:overflow-visible">
           <button
             onClick={() => { setActiveGeo('citywide'); setMainTab('headlines'); }}
             aria-pressed={mainTab === 'headlines'}
@@ -371,7 +372,9 @@ export default function App() {
               </button>
             ))}
           </nav>
-          <div className="ml-auto flex items-center gap-1.5">
+          </div>
+          <div className="flex items-center gap-1.5 sm:ml-auto w-full sm:w-auto justify-between sm:justify-start">
+            <div className="flex items-center gap-1.5">
             <button
               onClick={handleLocateUser}
               disabled={geoInert || isLocating}
@@ -394,7 +397,7 @@ export default function App() {
                 className={`w-full text-[11px] font-bold py-1.5 pl-8 pr-2 rounded border focus:outline-none truncate ${geoInert ? 'bg-gray-50 border-gray-200 text-gray-400 cursor-not-allowed' : geoFocused ? 'bg-white border-indigo-400' : 'bg-white border-gray-300'}`}
               />
               {geoFocused && !geoInert && (
-                <div className="absolute top-full right-0 w-72 mt-1 bg-white border border-gray-200 shadow-xl rounded z-50 max-h-72 overflow-y-auto">
+                <div className="absolute top-full left-0 sm:left-auto sm:right-0 w-64 sm:w-72 mt-1 bg-white border border-gray-200 shadow-xl rounded z-50 max-h-72 overflow-y-auto">
                   {geoSearchResults.showCitywide && (
                     <button onMouseDown={() => { selectGeo('citywide'); setGeoFocused(false); setSearchQuery(''); }} className={`w-full text-left px-3 py-2.5 hover:bg-gray-50 border-b border-gray-100 ${activeGeo === 'citywide' ? 'bg-gray-50 font-black' : ''}`}>
                       <div className="text-[11px] font-bold uppercase tracking-wider text-black">Citywide</div>
@@ -427,6 +430,8 @@ export default function App() {
                 </div>
               )}
             </div>
+            </div>
+            <div className="flex items-center gap-2.5">
             <div className="flex border border-gray-300 rounded overflow-hidden shrink-0">
               <button onClick={() => !ytdOnly && setActiveTab('wtd')} disabled={ytdOnly} aria-pressed={activeTab === 'wtd'} title={ytdOnly ? 'Weekly data is not available on this view' : 'This CompStat week vs the same week last year'} className={`px-2 py-1.5 text-[10px] font-black uppercase tracking-wide transition-colors ${ytdOnly ? 'bg-gray-50 text-gray-300 cursor-not-allowed' : activeTab === 'wtd' ? 'bg-gray-900 text-white' : 'bg-white text-gray-500 hover:text-black'}`}>Wk</button>
               <button onClick={() => setActiveTab('ytd')} aria-pressed={activeTab === 'ytd'} title="Year-to-date vs the same period last year" className={`px-2 py-1.5 text-[10px] font-black uppercase tracking-wide transition-colors ${activeTab === 'ytd' ? 'bg-gray-900 text-white' : 'bg-white text-gray-500 hover:text-black'}`}>YTD</button>
@@ -434,6 +439,7 @@ export default function App() {
             <button onClick={() => setAppView('historic')} title="The 30-year transformation of NYC crime" className="text-[11px] font-bold text-gray-400 hover:text-black transition-colors flex items-center gap-1 flex-shrink-0 whitespace-nowrap">
               <Activity size={12} /> 30-Yr
             </button>
+            </div>
           </div>
         </div>
 

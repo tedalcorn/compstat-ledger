@@ -49,10 +49,10 @@ export default function CrimeNumbers({ parsedData, activeTab, activeGeo, isTouri
     else { setSortBy(field); setSortDir(defaultDir); }
   };
 
-  const SortTh = ({ field, children, align = 'right', defaultDir = 'desc', title }) => {
+  const SortTh = ({ field, children, align = 'right', defaultDir = 'desc', title, thClass = '' }) => {
     const active = sortBy === field;
     return (
-      <th className={`py-2 ${align === 'right' ? 'text-right' : 'text-left'}`}>
+      <th className={`py-2 ${align === 'right' ? 'text-right' : 'text-left'} ${thClass}`}>
         <button
           onClick={() => handleSort(field, defaultDir)}
           title={title || 'Click to sort'}
@@ -98,13 +98,13 @@ export default function CrimeNumbers({ parsedData, activeTab, activeGeo, isTouri
       </div>
 
       <div className="overflow-x-auto">
-        <table className="w-full text-left border-collapse min-w-[760px]">
+        <table className="w-full text-left border-collapse min-w-0 sm:min-w-[760px]">
           <thead>
             <tr className="border-b-2 border-black">
-              <SortTh field="name" align="left" defaultDir="asc">Offense (Crime type)</SortTh>
+              <SortTh field="name" align="left" defaultDir="asc">Offense <span className="hidden sm:inline">(Crime type)</span></SortTh>
               <SortTh field="current">{colYear}</SortTh>
-              <SortTh field="diff">Year-on-year change</SortTh>
-              <SortTh field="pct">Year-on-year change (%)</SortTh>
+              <SortTh field="diff" thClass="hidden sm:table-cell">Year-on-year change</SortTh>
+              <SortTh field="pct"><span className="sm:hidden">Change</span><span className="hidden sm:inline">Year-on-year change (%)</span></SortTh>
               {isCitywide && <th className="py-2 text-center hidden md:table-cell"><span className="text-[10px] font-black uppercase tracking-widest text-gray-400 cursor-help underline decoration-dotted decoration-gray-300 underline-offset-[3px]" title={TREND_TOOLTIP}>Trend since {crimeHistory.citywide[0].y}</span></th>}
             </tr>
           </thead>
@@ -115,16 +115,16 @@ export default function CrimeNumbers({ parsedData, activeTab, activeGeo, isTouri
               const ctx = isCitywide ? getHistoricalContext(crimeHistory.citywide, item, currentYear) : null;
               return (
                 <tr key={item.name} className="hover:bg-gray-50 transition-colors">
-                  <td className="py-1 pr-8 font-bold text-sm text-black whitespace-nowrap">
+                  <td className="py-1 pr-2 sm:pr-8 font-bold text-[13px] sm:text-sm text-black whitespace-nowrap">
                     <span title={item.name === 'UCR Rape*' ? UCR_RAPE_NOTE : undefined} className={item.name === 'UCR Rape*' ? 'cursor-help decoration-dotted decoration-gray-300 underline underline-offset-[3px]' : undefined}>{displayName(item.name)}{isVolatile && <span className="ml-1 text-gray-400">*</span>}</span>
-                    {cls && <span className="ml-1.5 text-[11px] font-semibold" style={{ color: cls === 'Person' ? VC.magenta : VC.indigo }}>({cls})</span>}
+                    {cls && <span className="ml-1.5 text-[11px] font-semibold hidden sm:inline" style={{ color: cls === 'Person' ? VC.magenta : VC.indigo }}>({cls})</span>}
                   </td>
-                  <td className={`py-1 text-right tabular-nums text-sm font-black text-black ${isVolatile ? 'opacity-50' : ''}`}>{item.current.toLocaleString()}</td>
-                  <td className={`py-1 pl-8 text-right tabular-nums text-sm ${isVolatile ? 'opacity-50' : ''}`}>
+                  <td className={`py-1 pl-3 text-right tabular-nums text-sm font-black text-black ${isVolatile ? 'opacity-50' : ''}`}>{item.current.toLocaleString()}</td>
+                  <td className={`py-1 pl-8 text-right tabular-nums text-sm hidden sm:table-cell ${isVolatile ? 'opacity-50' : ''}`}>
                     <span className={`font-bold ${item.diff > 0 ? 'text-orange-700' : item.diff < 0 ? 'text-green-700' : 'text-gray-500'}`}>{dirCount(item.diff, 'offenses')}</span>
                     <span className="text-gray-400 font-normal text-[12px]"> (from {item.prior.toLocaleString()} in {colPrior})</span>
                   </td>
-                  <td className={`py-1 pl-8 text-right text-xs font-bold tabular-nums ${item.pct > 0 ? 'text-orange-600' : item.pct < 0 ? 'text-green-600' : 'text-gray-500'}`}>
+                  <td className={`py-1 pl-3 sm:pl-8 text-right text-xs font-bold tabular-nums whitespace-nowrap ${item.pct > 0 ? 'text-orange-600' : item.pct < 0 ? 'text-green-600' : 'text-gray-500'}`}>
                     {dirPct(item.pct)}
                   </td>
                   {isCitywide && (
