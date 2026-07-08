@@ -20,7 +20,7 @@ import sys
 from shapely.geometry import shape, mapping
 from shapely.ops import unary_union
 
-MIN_SHARE = 0.005  # ignore overlaps under 0.5% of district area (boundary slivers)
+MIN_SHARE = 0.02  # ignore overlaps under 2% of district area (boundary slivers / spurious intersections)
 SIMPLIFY_TOL = 0.0003  # ~30m; keeps the outline crisp but small enough to bundle
 
 

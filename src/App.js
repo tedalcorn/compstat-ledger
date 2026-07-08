@@ -351,7 +351,7 @@ export default function App() {
       <div className="max-w-[1100px] mx-auto px-5 sm:px-8">
 
         {/* Single-row navigation: brand, section tabs, geography, period toggle */}
-        <div className="sticky top-0 z-40 bg-white/95 backdrop-blur border-b border-gray-200 -mx-5 sm:-mx-8 px-5 sm:px-8 mb-8 py-2 flex flex-wrap items-center gap-x-2 gap-y-2">
+        <div className="sticky top-0 z-40 bg-white/95 backdrop-blur border-b border-gray-200 -mx-5 sm:-mx-8 px-5 sm:px-8 mb-8 py-2 flex flex-wrap items-center gap-x-2 gap-y-2 print:hidden">
           <button
             onClick={() => { setActiveGeo('citywide'); setMainTab('headlines'); }}
             aria-pressed={mainTab === 'headlines'}
