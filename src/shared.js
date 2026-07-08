@@ -226,16 +226,19 @@ export const calcPct = (current, prior) => {
 export const formatPct = (v) => (typeof v !== 'number' || Number.isNaN(v)) ? "—" : `${v > 0 ? "+" : ""}${v.toFixed(1)}%`;
 export const pctColor = (v) => v == null ? '#6b7280' : v > 0 ? '#c0392b' : v < 0 ? '#1f7a3a' : '#6b7280';
 // "Down 6.3%" / "Up 1.6%" / "No change" — how people actually talk about crime trends.
+// Whole numbers drop the trailing ".0" (e.g. "Up 100%", not "Up 100.0%").
 export const dirPct = (v, digits = 1) => {
   if (typeof v !== 'number' || Number.isNaN(v)) return '—';
   if (v === 0) return 'No change';
-  return `${v > 0 ? 'Up' : 'Down'} ${Math.abs(v).toFixed(digits)}%`;
+  const n = Math.abs(v).toFixed(digits).replace(/\.0$/, '');
+  return `${v > 0 ? 'Up' : 'Down'} ${n}%`;
 };
-// "Down 3,365 offenses" / "Up 374 offenses" / "No change".
+// "Down 3,365 offenses" / "Up 374 offenses" / "Up 1 incident" / "No change".
 export const dirCount = (v, unit = '') => {
   if (typeof v !== 'number') return '—';
   if (v === 0) return 'No change';
-  return `${v > 0 ? 'Up' : 'Down'} ${Math.abs(v).toLocaleString()}${unit ? ' ' + unit : ''}`;
+  const u = unit && Math.abs(v) === 1 ? unit.replace(/s$/, '') : unit; // singular at 1
+  return `${v > 0 ? 'Up' : 'Down'} ${Math.abs(v).toLocaleString()}${u ? ' ' + u : ''}`;
 };
 
 // Expand compact CompStat crime labels to friendlier names for prose.

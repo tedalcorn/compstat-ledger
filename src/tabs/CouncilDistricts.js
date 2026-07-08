@@ -155,6 +155,7 @@ const UP_COLOR = '#c2410c', DN_COLOR = '#15803d';
 const upTok = (t) => `{up:${t}}`;
 const dnTok = (t) => `{dn:${t}}`;
 const cPct = (pct) => (pct > 0 ? upTok : dnTok)(lowDir(pct)); // "down 7.6%", colored by sign
+const cWrap = (text, pct) => (pct > 0 ? upTok : dnTok)(text); // color a whole phrase by a pct's sign
 const renderFinding = (text) => {
   const parts = text.split(/(\{up:.*?\}|\{dn:.*?\}|\*\*.*?\*\*)/g);
   return parts.map((p, i) => {
@@ -379,6 +380,12 @@ export default function CouncilDistricts({ rawData, activeTab, districtNum, setD
     fetchShootings().then(d => { if (alive) setShootings(d); });
     return () => { alive = false; };
   }, []);
+  // Date span + citywide count of the mapped shootings, for an honest coverage note.
+  const shootingWindow = useMemo(() => {
+    if (!shootings || !shootings.length) return null;
+    const dates = shootings.map(s => s.date).filter(Boolean).sort();
+    return { from: dates[0], to: dates[dates.length - 1], n: shootings.length };
+  }, [shootings]);
 
   const period = rawData?.citywide?.report_period || {};
   const endYear = period?.week_end ? new Date(period.week_end).getFullYear() : new Date().getFullYear();
@@ -427,15 +434,15 @@ export default function CouncilDistricts({ rawData, activeTab, districtNum, setD
       const dir = majDown ? 'down' : 'up';
       const cnt = majDown ? f.downCount : f.upCount;
       const shr = Math.round((majDown ? f.downShare : f.upShare) * 100);
-      out.push(`Crime is ${(dir === 'up' ? upTok : dnTok)(dir)} in **${cnt} of the ${f.nP}** precincts that make up ${dName}, together covering **${shr}%** of its area.`);
+      out.push(`Crime is ${cWrap(`${dir} in ${cnt} of the ${f.nP} precincts`, dir === 'up' ? 1 : -1)} that make up ${dName}, together covering **${shr}%** of its area.`);
     }
     // 2. Weighted average change vs citywide.
     if (f.districtAll.pct != null) {
-      out.push(`Across its precincts, total crime is ${cPct(f.districtAll.pct)} and violent crime ${cPct(f.districtVio.pct)} (weighted by each precinct's share of the district) — vs. citywide ${cPct(f.cwAll.pct)} and ${cPct(f.cwVio.pct)}.`);
+      out.push(`Across its precincts, ${cWrap(`total crime is ${lowDir(f.districtAll.pct)}`, f.districtAll.pct)} and ${cWrap(`violent crime ${lowDir(f.districtVio.pct)}`, f.districtVio.pct)} (weighted by each precinct's share of the district) — vs. citywide ${cPct(f.cwAll.pct)} and ${cPct(f.cwVio.pct)}.`);
     }
     // 3. Biggest driver crime type.
     if (f.driver) {
-      out.push(`The biggest driver of the change is **${expandCrime(f.driver.name)}**, ${cPct(f.driver.pct)} on average across the precincts.`);
+      out.push(`The biggest factor is that ${cWrap(`${expandCrime(f.driver.name)} is ${lowDir(f.driver.pct)}`, f.driver.pct)} on average across the precincts.`);
     }
     // 4 / 5. Sharpest single precinct×crime movers.
     if (f.sharpUp) {
@@ -484,14 +491,23 @@ export default function CouncilDistricts({ rawData, activeTab, districtNum, setD
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-[1.15fr_1fr] gap-8 items-stretch">
-        <DistrictMap
-          district={district}
-          onSelectPrecinct={onSelectPrecinct}
-          shootings={shootings}
-          showShootings={showShootings}
-          setShowShootings={setShowShootings}
-          shootingsLoaded={shootings != null}
-        />
+        <div className="flex flex-col h-full">
+          <div className="flex-1 min-h-0">
+            <DistrictMap
+              district={district}
+              onSelectPrecinct={onSelectPrecinct}
+              shootings={shootings}
+              showShootings={showShootings}
+              setShowShootings={setShowShootings}
+              shootingsLoaded={shootings != null}
+            />
+          </div>
+          {showShootings && shootingWindow && (
+            <p className="mt-2.5 text-[11px] font-serif italic text-gray-500 leading-snug">
+              {shootingWindow.n} shooting incidents reported citywide {fmtDate(shootingWindow.from)}–{fmtDate(shootingWindow.to)}, nearly all with a mapped location, from NYPD Open Data. Click a dot for details. The year-to-date file refreshes quarterly, so the most recent weeks aren't shown yet.
+            </p>
+          )}
+        </div>
 
         <div>
           <div className="flex items-baseline justify-between gap-3 mb-3">
