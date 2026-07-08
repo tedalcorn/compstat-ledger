@@ -204,16 +204,16 @@ const PrecinctRankingBars = ({ precinctRates, onSelect, mapMode = 'rate', hovere
   const botMax = mapMode === 'change' ? Math.abs(bottom5[0]?.pctChange || 1) : (top5[0]?.rate || 1);
 
   return (
-    <div>
+    <div className="flex flex-col justify-between h-full gap-6">
       <div>
         <div className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2 flex items-center gap-1" style={{ color: VC.magenta }}>
           <TrendingUp size={12} /> {mapMode === 'change' ? 'Biggest % increases' : 'Highest rate (per 100k)'}
         </div>
         {top5.map(item => renderRow(item, VC.magenta, topMax, 'up'))}
       </div>
-      <div className="mt-4 pt-3 border-t border-gray-100">
-        <div className="text-[10px] font-black uppercase tracking-widest mb-2 flex items-center gap-1 justify-end" style={{ color: VC.green }}>
-          {mapMode === 'change' ? 'Biggest % decreases' : 'Lowest rate (per 100k)'} <TrendingDown size={12} />
+      <div>
+        <div className="text-[10px] font-black uppercase tracking-widest mb-2 flex items-center gap-1" style={{ color: VC.green }}>
+          <TrendingDown size={12} /> {mapMode === 'change' ? 'Biggest % decreases' : 'Lowest rate (per 100k)'}
         </div>
         {bottom5.map(item => renderRow(item, VC.green, botMax, 'down'))}
       </div>
@@ -261,7 +261,7 @@ export default function ByPrecinct({ precinctRates, mapMode, setMapMode, mapCrim
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-[3fr_2fr] gap-8 items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-[2.3fr_1fr] gap-8 items-stretch">
         <PrecinctMap precinctRates={precinctRates} onSelect={onSelectPrecinct} mapMode={mapMode} externalHovered={hoveredPrecinctNum} onHover={setHoveredPrecinctNum} />
         <PrecinctRankingBars precinctRates={precinctRates} onSelect={onSelectPrecinct} mapMode={mapMode} hoveredPrecinctNum={hoveredPrecinctNum} onHover={setHoveredPrecinctNum} />
       </div>

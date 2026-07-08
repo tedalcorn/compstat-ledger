@@ -269,26 +269,20 @@ export default function Transit({ rawData, downloadCSV }) {
             district in the complaint extract and cannot appear in the table above. */}
         <div className="mt-8 p-5 bg-gray-50 border border-gray-200 rounded-sm">
           <span className="text-[11px] font-black uppercase tracking-widest text-gray-600">Transit homicides</span>
-          <p className="text-[13px] text-gray-600 leading-relaxed mt-2 mb-5 max-w-3xl">
-            Homicides are tracked separately by the NYPD Transit Bureau. Last year closed with {TH_LAST.count} transit murders, {TH_CHG >= 0 ? 'down' : 'up'} {Math.abs(TH_CHG)}% from {TH_PREV.year} and the lowest in five years.
-          </p>
-          <div className="flex items-end gap-6 sm:gap-10 mb-5">
-            {TH.map(h => (
-              <div key={h.year} className="flex flex-col items-center">
-                <span className="text-[15px] font-black tabular-nums text-black mb-1.5">{h.count}</span>
-                <div className="w-12 rounded-t-sm" style={{ height: `${Math.max(4, (h.count / TH_MAX) * 110)}px`, background: '#991b1b' }} />
-                <span className="text-[11px] font-bold text-gray-500 mt-2 pt-1.5 border-t border-gray-300 w-12 text-center">{h.year}</span>
-              </div>
-            ))}
+          <div className="mt-2.5 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-6">
+            <p className="text-[13px] text-gray-600 leading-relaxed max-w-md">
+              Homicides are tracked separately by the NYPD Transit Bureau. Last year closed with {TH_LAST.count} transit murders, {TH_CHG >= 0 ? 'down' : 'up'} {Math.abs(TH_CHG)}% from {TH_PREV.year} and the lowest in five years.
+            </p>
+            <div className="flex items-end gap-5 flex-shrink-0">
+              {TH.map(h => (
+                <div key={h.year} className="flex flex-col items-center">
+                  <span className="text-[13px] font-black tabular-nums text-black mb-1">{h.count}</span>
+                  <div className="w-9 rounded-t-sm" style={{ height: `${Math.max(3, (h.count / TH_MAX) * 56)}px`, background: '#991b1b' }} />
+                  <span className="text-[10px] font-bold text-gray-500 mt-1.5 pt-1 border-t border-gray-300 w-9 text-center">{h.year}</span>
+                </div>
+              ))}
+            </div>
           </div>
-          <p className="text-[11px] text-gray-400 leading-relaxed max-w-3xl">
-            Sources: {TRANSIT_HOMICIDES.sources.map((s, i) => (
-              <span key={s.url}>
-                {i > 0 && ' · '}
-                <a href={s.url} target="_blank" rel="noopener noreferrer" className="underline decoration-dotted underline-offset-2 hover:text-black">{s.label}</a>
-              </span>
-            ))}. Hand-entered figures, not a live feed; full-year counts may be revised by NYPD.
-          </p>
         </div>
 
         <p className="text-[12px] text-gray-400 mt-6 italic leading-relaxed max-w-3xl">
