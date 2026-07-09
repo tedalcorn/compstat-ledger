@@ -8,7 +8,7 @@ import {
   getPrePandemicRecovery, precinctHistorySeries, precinctPatrolBorough, numWord,
   calcPct, dirPct,
   RTCI_GROUPS, RTCI_FALLBACK, RTCI_FALLBACK_PERIOD, RTCI_FALLBACK_UPDATED, rtciRate,
-  Users, Download,
+  Download,
 } from '../shared';
 
 /* ------------------------------------------------------------------ */
@@ -59,7 +59,6 @@ const LocatorMap = ({ activeGeo, onSelectGeo, width = 190, height = 150 }) => {
         })}
       </svg>
       <p className="text-[11px] font-bold text-gray-700 mt-1.5 leading-tight">{label}</p>
-      {onSelectGeo && <p className="text-[10px] text-gray-400 leading-tight mt-0.5">Tap a precinct to see its numbers.</p>}
     </div>
   );
 };
@@ -179,11 +178,6 @@ const NationalSidebar = ({ rtciData, downloadCSV }) => {
           </div>
         ))}
       </div>
-      {activeMetric === 'murder' && (
-        <p className="mt-2.5 text-[10px] font-serif italic text-gray-500 leading-snug">
-          Murder is the most reliably comparable category across cities; violent and property totals are more affected by classification and reporting differences.
-        </p>
-      )}
       <div className="mt-3 pt-2.5 border-t border-gray-200 flex flex-col gap-1.5">
         <p className="text-[9px] text-gray-400 leading-snug">Data through {period} · Updated {updated} · UCR Part I offenses</p>
         <div className="flex items-center gap-2.5">
@@ -384,9 +378,6 @@ export default function Headlines({ parsedData, hotspots, rawData, activeTab, ac
           </div>
           <div className="flex flex-wrap items-center gap-x-6 gap-y-1 mt-2.5 text-[12px] text-gray-400">
             <span>{activeTab === 'ytd' ? `Year-to-date through ${period?.week_end || '—'}` : `Week of ${period?.week_start || '—'} – ${period?.week_end || '—'}`}</span>
-            {activePop && activeGeo !== 'citywide' && !isTouristPrecinct && (
-              <span className="flex items-center gap-1 text-gray-500"><Users size={12} /> {((totals.mCur / activePop) * 100000).toFixed(1)} per 100k residents (citywide: {(totals.citywideRate || 0).toFixed(1)})</span>
-            )}
           </div>
         </div>
         <LocatorMap activeGeo={activeGeo} onSelectGeo={onSelectGeo} />
