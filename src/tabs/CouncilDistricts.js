@@ -3,6 +3,7 @@ import { geoPath, geoMercator, geoContains } from 'd3-geo';
 import precinctGeoJSON from '../data/nyc_precincts.json';
 import councilData from '../data/council_districts.json';
 import vcLogo from '../vitalcity-logo.png';
+import SubscribeBand from './Subscribe';
 import {
   PRECINCT_NEIGHBORHOODS, MAJOR_VIOLENT, MAJOR_PROPERTY, VOLATILITY_THRESHOLD,
   safeNum, pctColor, dirPct, signedCount, expandCrime,
@@ -231,7 +232,7 @@ const DistrictMap = ({ district, onSelectPrecinct, shootings, showShootings, set
 
 
   return (
-    <div className={`relative ${printMode ? 'h-full' : 'h-full min-h-[440px]'}`}>
+    <div className={`relative ${printMode ? 'h-full' : 'w-full aspect-[14/13]'}`}>
       {/* Shootings toggle (hidden in the print one-pager) */}
       {!printMode && (
         <button
@@ -493,12 +494,13 @@ export default function CouncilDistricts({ rawData, activeTab, districtNum, setD
   return (
     <>
       <div className="print:hidden">
-      {/* The district selector is the page title */}
+      {/* The district selector is the page title. Arrows pin to the row edges (title
+          absorbs the slack) so they never shift as member-name length changes. */}
       <div className="flex items-start gap-1.5 sm:gap-3 mb-6">
         <button
           onClick={() => setDistrictNum(district.district <= 1 ? 51 : district.district - 1)}
           className="px-2 sm:px-2.5 py-1.5 sm:py-2 text-[13px] font-black border border-gray-300 rounded hover:bg-gray-50 flex-shrink-0 mt-1" aria-label="Previous district">←</button>
-        <DistrictTitleSelector districts={districts} district={district} setDistrictNum={setDistrictNum} />
+        <div className="flex-1 min-w-0"><DistrictTitleSelector districts={districts} district={district} setDistrictNum={setDistrictNum} /></div>
         <button
           onClick={() => setDistrictNum(district.district >= 51 ? 1 : district.district + 1)}
           className="px-2 sm:px-2.5 py-1.5 sm:py-2 text-[13px] font-black border border-gray-300 rounded hover:bg-gray-50 flex-shrink-0 mt-1" aria-label="Next district">→</button>
@@ -520,7 +522,7 @@ export default function CouncilDistricts({ rawData, activeTab, districtNum, setD
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-[1.15fr_1fr] gap-8 items-stretch">
+      <div className="grid grid-cols-1 lg:grid-cols-[1.15fr_1fr] gap-8 items-start">
         <DistrictMap
           district={district}
           onSelectPrecinct={onSelectPrecinct}
@@ -637,6 +639,9 @@ export default function CouncilDistricts({ rawData, activeTab, districtNum, setD
           {shootingWindow.total} shooting incidents were reported citywide {fmtDate(shootingWindow.from)}–{fmtDate(shootingWindow.to)}, {shootingWindow.located} of them ({Math.round((shootingWindow.located / shootingWindow.total) * 100)}%) with a precise mapped location — the rest lacked coordinates. Dots show the {shootingWindow.located} mapped incidents; click one for details. Source: NYPD Open Data, refreshed quarterly, so the most recent weeks aren't shown yet.
         </p>
       )}
+
+      {/* Email-updates signup (mock: no delivery service connected yet) */}
+      <SubscribeBand district={district} districts={districts} f={f} rows={rows} period={period} />
       </div>
 
       {/* Print-only one-page district report (Download PDF -> browser Save as PDF) */}

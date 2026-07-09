@@ -2,42 +2,135 @@ import React from 'react';
 
 /* ------------------------------------------------------------------ */
 /* ABOUT TAB                                                           */
-/* Data sources, methodology and project info — moved off every page   */
-/* into its own tab.                                                   */
+/* Full accounting of every data source the dashboard uses, live or    */
+/* embedded, and the methodology applied to each.                      */
 /* ------------------------------------------------------------------ */
+
+const H = ({ children }) => (
+  <h3 className="text-[10px] font-black uppercase tracking-widest text-gray-500 mb-3 mt-10 first:mt-0">{children}</h3>
+);
+const P = ({ children }) => (
+  <p className="font-serif text-[15px] leading-relaxed text-gray-700 mb-3">{children}</p>
+);
+const A = ({ href, children }) => (
+  <a href={href} className="underline hover:text-black" target="_blank" rel="noopener noreferrer">{children}</a>
+);
+const Code = ({ children }) => <code className="text-[12px]">{children}</code>;
+
 export default function About({ parsedData, fetchError }) {
   return (
     <div className="max-w-3xl">
       <h2 className="text-2xl font-black font-serif mb-6">About this project</h2>
 
-      <p className="font-serif text-[16px] leading-relaxed text-gray-700 mb-8">
-        Published by <a href="https://vitalcitynyc.org/" className="underline hover:text-black" target="_blank" rel="noopener noreferrer">Vital City</a>, an independent New York policy journal. NYC CompStat Decoder reads the NYPD's weekly CompStat report and pairs it with NYC Open Data and Census figures to put the week's numbers in longer-run and geographic context. The project is open source; data refreshes every Monday after NYPD posts the new CompStat report.
-      </p>
+      <P>
+        Published by <A href="https://vitalcitynyc.org/">Vital City</A>, an independent New York policy journal.
+        NYC CompStat Decoder reads the NYPD&rsquo;s weekly CompStat report and puts the week&rsquo;s numbers in
+        longer-run and geographic context. The project is open source. Everything on this site traces to one of
+        the sources described below; each note says what the data covers, where it comes from, and what was done to it.
+      </P>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-10 text-[13px] text-gray-600">
-        <div>
-          <h3 className="text-[10px] font-black uppercase tracking-widest text-gray-500 mb-3">Data sources</h3>
-          <ul className="space-y-1.5 leading-snug">
-            <li>NYPD CompStat 2.0 weekly report (scraped from <a href="https://compstat.nypdonline.org/" className="underline hover:text-black" target="_blank" rel="noopener noreferrer">compstat.nypdonline.org</a>)</li>
-            <li>NYC Open Data — NYPD Complaint Data Historic (<code className="text-[11px]">qgea-i56i</code>) &amp; Current YTD (<code className="text-[11px]">5uac-w243</code>)</li>
-            <li>NYPD historical annual indices, 1993–present (NYPD Historical NYC Crime Data)</li>
-            <li>U.S. Census ACS population estimates for per-100k rate calculations</li>
-            <li>Real-Time Crime Index by AH Datalytics for peer-city comparison</li>
-            <li>NYC Open Data council district &amp; precinct boundary files for the district-precinct crosswalk</li>
-          </ul>
-        </div>
-        <div>
-          <h3 className="text-[10px] font-black uppercase tracking-widest text-gray-500 mb-3">Methodology notes</h3>
-          <ul className="space-y-1.5 leading-snug">
-            <li>"Year-to-date" follows NYPD's CompStat week ending on Sunday — same-period prior-year comparison.</li>
-            <li>"Tourist hubs" (14th, 18th, 22nd precincts) have residential populations far below daytime populations, so per-100k rates are flagged with a hatch overlay. % change is unaffected.</li>
-            <li>Pre-pandemic baseline = mean and range of 2017–2019 annual totals.</li>
-            <li>Current-year trend dot uses an annualized projection: <code className="text-[11px]">current_ytd / (prior_year_ytd / prior_year_full)</code>.</li>
-            <li>Precinct-level pattern callouts filter for a base of at least 5 incidents in the prior period to avoid volatile small-sample noise.</li>
-            <li>Council-district precinct shares = share of the district's land area inside each precinct, from the official 2023 council lines. By-district figures are always year-to-date — weekly counts are too small at that geography to be meaningful.</li>
-          </ul>
-        </div>
-      </div>
+      <H>The CompStat report</H>
+      <P>
+        The core source is the NYPD&rsquo;s weekly CompStat 2.0 report, scraped
+        from <A href="https://compstat.nypdonline.org/">compstat.nypdonline.org</A> by an automated pipeline each
+        Monday after the NYPD posts it. The report covers the seven major felonies plus additional offenses
+        (shootings, misdemeanor assault, petit larceny, retail theft, hate crimes, and transit and housing
+        totals) for the city as a whole, the eight patrol boroughs, and all 77 precincts, with week,
+        28-day, and year-to-date comparisons against the same period a year earlier.
+      </P>
+      <P>
+        Nearly every count and percent change on the dashboard comes from this report. If the live feed is
+        unreachable, the site falls back to an embedded snapshot of a recent week and says so in the footer below.
+      </P>
+
+      <H>Historical series, 1993&ndash;2025</H>
+      <P>
+        Annual counts of the seven major felonies and shooting incidents, citywide and by precinct, drive the
+        &ldquo;trend since 1993&rdquo; sparklines and the long-run context throughout the dashboard. These come
+        from the NYPD&rsquo;s <A href="https://www.nyc.gov/site/nypd/stats/crime-statistics/historical.page">Historical
+        New York City Crime Data</A>, which the department updates each year. They can differ slightly from FBI
+        Uniform Crime Reporting figures for the same years.
+      </P>
+
+      <H>NYC Open Data</H>
+      <P>
+        Three live queries go to the city&rsquo;s open data portal, each for a specific feature:
+      </P>
+      <P>
+        <strong>Transit offense breakdown.</strong> The by-offense table under In Transit queries the NYPD
+        complaint data, current year (<Code>5uac-w243</Code>) and historic (<Code>qgea-i56i</Code>), filtered
+        to complaints carrying a transit-district code, and compares the same calendar window in the prior
+        year. Complaint data is a different reporting stream from CompStat: it counts complaints as recorded
+        and is subject to revision, so these figures will not exactly match the CompStat transit totals shown
+        above them.
+      </P>
+      <P>
+        <strong>Shooting incidents.</strong> The map under By Council District plots the NYPD Shooting
+        Incident Data, year to date (<Code>5ucz-vwe8</Code>), at the incident level. The latitude and
+        longitude fields are transposed in the source dataset; the site corrects for this.
+      </P>
+      <P>
+        <strong>Precinct locator.</strong> The &ldquo;locate me&rdquo; button checks the visitor&rsquo;s
+        position against the police precinct boundary file (<Code>78dh-3ptz</Code>) to select a precinct.
+        Location is used for that lookup only and is not stored.
+      </P>
+
+      <H>Transit homicides</H>
+      <P>
+        Murders are never coded to a transit district in the complaint-level extract (in 2024, none of the
+        382 citywide murder complaints carried one), so the transit homicide figures under In Transit
+        cannot come from the query above. They are hand-entered full-year counts, 2022 through 2025, taken
+        from NYPD year-end announcements and contemporaneous coverage, with each source cited alongside them.
+        They are not a live feed and update only when edited.
+      </P>
+
+      <H>Peer cities</H>
+      <P>
+        The city comparison on the home page uses the <A href="https://realtimecrimeindex.com/">Real-Time
+        Crime Index</A> by AH Datalytics, a monthly compilation of open crime data from several hundred U.S.
+        cities. Rates per 100,000 use the population figures RTCI publishes. Cities that have not yet
+        reported for the displayed period are excluded rather than shown as zero. If the live file is
+        unreachable, an embedded snapshot is shown with its date noted.
+      </P>
+
+      <H>Populations and rates</H>
+      <P>
+        Per-100,000 rates use 2020 decennial Census populations, allocated to precincts
+        via <A href="https://github.com/jkeefe/census-by-precincts">John Keefe&rsquo;s census-by-precincts
+        crosswalk</A>; patrol borough populations are sums of their precincts, and the citywide figure is
+        8,804,190. Rates reflect residential population. The three &ldquo;tourist hub&rdquo; precincts
+        (14th, 18th, and 22nd) have daytime populations far above their residential ones, most extremely
+        the 22nd (Central Park, 129 residents), so their rates carry a hatch overlay as a warning; percent
+        changes are unaffected.
+      </P>
+
+      <H>Council districts</H>
+      <P>
+        District boundaries are the official 2023 City Council lines from NYC Open Data, and member names
+        come from <A href="https://council.nyc.gov/districts/">council.nyc.gov</A>. Because the NYPD reports
+        by precinct, not by district, each district&rsquo;s figures are built by weighting its precincts&rsquo;
+        year-to-date CompStat counts by the share of the district&rsquo;s land area falling in each precinct
+        (overlaps under 2 percent are dropped as boundary slivers). This is an approximation: it assumes
+        crime is spread evenly within a precinct. District figures are always year to date, since weekly
+        counts are too small at that geography to be meaningful.
+      </P>
+
+      <H>The 30-year page</H>
+      <P>
+        The &ldquo;30-Year Transformation&rdquo; page draws on the same historical series, plus citywide
+        misdemeanor assault counts for 2000&ndash;2024 from the NYPD&rsquo;s historical misdemeanor tables.
+        Its precinct scatterplot pairs precinct poverty rates against per-100,000 offense rates; Vital City
+        has not independently verified those underlying figures, and they should be read as illustrative.
+      </P>
+
+      <H>Methodology notes</H>
+      <ul className="space-y-1.5 leading-snug text-[13px] text-gray-600 mb-3">
+        <li>&ldquo;Year-to-date&rdquo; follows the CompStat week, which ends on Sunday, compared against the same period a year earlier.</li>
+        <li>The pre-pandemic baseline is the mean and range of the 2017&ndash;2019 annual totals.</li>
+        <li>The current-year dot on trend sparklines is an annualized projection: <Code>current_ytd / (prior_year_ytd / prior_year_full)</Code>.</li>
+        <li>Precinct-level pattern callouts require at least 5 incidents in the prior period, to avoid volatile small-sample swings.</li>
+        <li>&ldquo;Rape (UCR)&rdquo; uses the FBI&rsquo;s broader Uniform Crime Reporting definition, which runs higher than New York&rsquo;s penal-law rape count.</li>
+      </ul>
 
       <div className="mt-10 pt-6 border-t border-gray-200 text-[13px] text-gray-500 leading-snug">
         <p className="mb-2">
